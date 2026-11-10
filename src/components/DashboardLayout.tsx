@@ -240,3 +240,4 @@ export const STUDENT_LINKS: SidebarLink[] = [
   { to: '/student/referrals', label: 'Refer & Earn', icon: Gift },
   { to: '/student/profile', label: 'Profile & Settings', icon: UserIcon },
 ];
+

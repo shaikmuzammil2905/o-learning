@@ -95,3 +95,4 @@ export function CourseIcon({ name, className = 'w-7 h-7' }: { name: string; clas
       return <BookOpen className={className} />;
   }
 }
+

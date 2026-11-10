@@ -64,3 +64,4 @@ export function BrandLogo({ compact = false, dark = false, to = '/' }: BrandLogo
     </Link>
   );
 }
+

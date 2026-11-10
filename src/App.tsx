@@ -52,13 +52,47 @@ function RequireRole({ roles, children }: { roles: UserRole[]; children: React.R
   return <>{children}</>;
 }
 
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; message: string }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, message: '' };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, message: error.message };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] p-6 text-center">
+          <h1 className="font-display font-bold text-2xl text-[#002B7A]">O-LEARNING PLATFORM</h1>
+          <p className="text-sm text-slate-600 mt-2 max-w-md">
+            Something went wrong while rendering this view ({this.state.message}).
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-4 px-5 py-2.5 rounded-xl bg-[#0052CC] text-white text-sm font-bold cursor-pointer"
+          >
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
-    <AuthProvider>
-      <SiteProvider>
-        <SplashScreen />
-        <BrowserRouter>
-          <Routes>
+    <AppErrorBoundary>
+      <AuthProvider>
+        <SiteProvider>
+          <BrowserRouter>
+            <SplashScreen />
+            <Routes>
             {/* Public Website */}
             <Route path="/" element={<HomePage />} />
             <Route path="/courses" element={<CoursesPage />} />
@@ -267,5 +301,7 @@ export default function App() {
         </BrowserRouter>
       </SiteProvider>
     </AuthProvider>
+    </AppErrorBoundary>
   );
 }
+

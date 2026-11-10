@@ -42,3 +42,4 @@ A full-stack EdTech LMS, Public Website, Student Learning App, Faculty Portal, a
    npm start
    ```
    Serves the production SPA and `/api/*` endpoints from `http://localhost:4000` (or `PORT` env variable).
+

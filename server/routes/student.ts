@@ -687,3 +687,4 @@ router.post('/notifications/read', (req, res) => {
 });
 
 export default router;
+

@@ -3,7 +3,11 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
-const dbPath = process.env.DB_PATH || path.resolve(process.cwd(), 'data', 'o_learning.db');
+const dbPath =
+  process.env.DB_PATH ||
+  (process.env.VERCEL
+    ? path.join('/tmp', 'o_learning.db')
+    : path.resolve(process.cwd(), 'data', 'o_learning.db'));
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
 const db = new DatabaseSync(dbPath);
@@ -1293,3 +1297,4 @@ function seedDatabase(): void {
 }
 
 export default db;
+

@@ -473,3 +473,4 @@ export function CourseDetailPage() {
     </PublicLayout>
   );
 }
+

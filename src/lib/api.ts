@@ -25,6 +25,9 @@ export async function api<T = unknown>(url: string, options: RequestInit = {}): 
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
+    if (res.ok) {
+      throw new ApiError('Unexpected non-JSON response from API.', res.status);
+    }
     data = text;
   }
 
@@ -60,3 +63,4 @@ export function formatDateTime(iso: string): string {
     return iso;
   }
 }
+

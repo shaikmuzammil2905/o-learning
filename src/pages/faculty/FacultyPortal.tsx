@@ -649,3 +649,4 @@ export function FacultyPortal({ section = 'overview' }: { section?: string }) {
     </DashboardLayout>
   );
 }
+
