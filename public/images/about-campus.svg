@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" fill="none">
+  <defs>
+    <linearGradient id="abg" x1="0" y1="0" x2="900" y2="540" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00308F"/>
+      <stop offset="55%" stop-color="#0052CC"/>
+      <stop offset="100%" stop-color="#007BFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="540" rx="28" fill="url(#abg)"/>
+  <circle cx="770" cy="110" r="170" fill="#FF7A00" fill-opacity="0.22"/>
+  <circle cx="140" cy="440" r="180" fill="#FFFFFF" fill-opacity="0.06"/>
+  <!-- Live Studio Screen -->
+  <rect x="90" y="80" width="460" height="310" rx="24" fill="#FFFFFF"/>
+  <rect x="114" y="104" width="412" height="220" rx="16" fill="#EFF6FF"/>
+  <rect x="134" y="124" width="76" height="28" rx="14" fill="#EF4444"/>
+  <circle cx="152" cy="138" r="5" fill="#FFFFFF"/>
+  <!-- Instructor Figure -->
+  <circle cx="320" cy="182" r="44" fill="#0052CC"/>
+  <path d="M242 296C242 252 276 226 320 226C364 226 398 252 398 296H242Z" fill="#0052CC"/>
+  <rect x="114" y="340" width="220" height="16" rx="8" fill="#CBD5E1"/>
+  <rect x="354" y="340" width="172" height="16" rx="8" fill="#FF7A00"/>
+  <!-- Floating Student Cards -->
+  <rect x="580" y="110" width="240" height="110" rx="20" fill="#FFFFFF"/>
+  <circle cx="630" cy="165" r="28" fill="#FF7A00"/>
+  <rect x="674" y="148" width="118" height="12" rx="6" fill="#0F172A"/>
+  <rect x="674" y="172" width="84" height="10" rx="5" fill="#94A3B8"/>
+
+  <rect x="580" y="245" width="240" height="110" rx="20" fill="#FFFFFF"/>
+  <circle cx="630" cy="300" r="28" fill="#22C55E"/>
+  <path d="M618 300L627 309L643 291" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <rect x="674" y="283" width="118" height="12" rx="6" fill="#0F172A"/>
+  <rect x="674" y="307" width="96" height="10" rx="5" fill="#94A3B8"/>
+
+  <!-- Bottom Hyderabad Pill -->
+  <rect x="180" y="425" width="540" height="58" rx="29" fill="#FFFFFF" fill-opacity="0.14" stroke="#FFFFFF" stroke-opacity="0.3" stroke-width="2"/>
+  <circle cx="222" cy="454" r="14" fill="#FF7A00"/>
+  <rect x="252" y="446" width="290" height="14" rx="7" fill="#FFFFFF"/>
+  <rect x="560" y="446" width="120" height="14" rx="7" fill="#FF8C1A"/>
+</svg>

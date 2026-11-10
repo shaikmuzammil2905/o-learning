@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" fill="none">
+  <defs>
+    <linearGradient id="bg1" x1="0" y1="0" x2="800" y2="450" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#003EB3"/>
+      <stop offset="55%" stop-color="#0061EB"/>
+      <stop offset="100%" stop-color="#0A7BFF"/>
+    </linearGradient>
+    <linearGradient id="or1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FF9A2E"/>
+      <stop offset="100%" stop-color="#FF6B00"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="450" rx="24" fill="url(#bg1)"/>
+  <circle cx="680" cy="70" r="140" fill="#FFFFFF" fill-opacity="0.06"/>
+  <circle cx="110" cy="390" r="120" fill="#FF7A00" fill-opacity="0.18"/>
+  <path d="M0 360C180 300 320 420 520 350C660 300 740 330 800 300V450H0V360Z" fill="#00308F" fill-opacity="0.5"/>
+  <!-- Speech Bubbles & Sound Waves -->
+  <rect x="130" y="95" width="260" height="150" rx="28" fill="#FFFFFF"/>
+  <path d="M180 245L155 285L220 245H180Z" fill="#FFFFFF"/>
+  <circle cx="195" cy="170" r="14" fill="#FF7A00"/>
+  <circle cx="255" cy="170" r="14" fill="#0052CC"/>
+  <circle cx="315" cy="170" r="14" fill="#FF7A00"/>
+  <rect x="430" y="145" width="230" height="135" rx="26" fill="url(#or1)"/>
+  <path d="M600 280L628 318L565 280H600Z" fill="#FF6B00"/>
+  <!-- Microphone & Soundbars inside orange bubble -->
+  <rect x="475" y="180" width="28" height="48" rx="14" fill="#FFFFFF"/>
+  <path d="M463 206C463 221 474 233 489 233C504 233 515 221 515 206" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <line x1="489" y1="233" x2="489" y2="248" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <rect x="540" y="195" width="8" height="32" rx="4" fill="#FFFFFF" fill-opacity="0.9"/>
+  <rect x="558" y="182" width="8" height="58" rx="4" fill="#FFFFFF"/>
+  <rect x="576" y="190" width="8" height="42" rx="4" fill="#FFFFFF" fill-opacity="0.9"/>
+  <rect x="594" y="200" width="8" height="22" rx="4" fill="#FFFFFF" fill-opacity="0.8"/>
+  <!-- Floating badges -->
+  <rect x="260" y="305" width="240" height="54" rx="27" fill="#FFFFFF" fill-opacity="0.16" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="2"/>
+  <circle cx="294" cy="332" r="14" fill="#FF8C1A"/>
+  <path d="M289 332L293 336L301 327" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="322" y="324" width="145" height="8" rx="4" fill="#FFFFFF"/>
+  <rect x="322" y="338" width="95" height="6" rx="3" fill="#FFFFFF" fill-opacity="0.6"/>
+</svg>

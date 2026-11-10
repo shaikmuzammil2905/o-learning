@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" fill="none">
+  <defs>
+    <linearGradient id="bg4" x1="0" y1="0" x2="800" y2="450" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0038A8"/>
+      <stop offset="100%" stop-color="#0265E3"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="450" rx="24" fill="url(#bg4)"/>
+  <circle cx="400" cy="225" r="210" fill="#FFFFFF" fill-opacity="0.05"/>
+  <!-- Classical Pillars Building -->
+  <path d="M235 160L400 85L565 160H235Z" fill="#FF8C1A"/>
+  <rect x="245" y="160" width="310" height="22" rx="4" fill="#FFFFFF"/>
+  <rect x="268" y="182" width="32" height="135" fill="#FFFFFF" fill-opacity="0.95"/>
+  <rect x="334" y="182" width="32" height="135" fill="#FFFFFF" fill-opacity="0.95"/>
+  <rect x="434" y="182" width="32" height="135" fill="#FFFFFF" fill-opacity="0.95"/>
+  <rect x="500" y="182" width="32" height="135" fill="#FFFFFF" fill-opacity="0.95"/>
+  <rect x="230" y="317" width="340" height="22" rx="6" fill="#FFFFFF"/>
+  <rect x="210" y="339" width="380" height="22" rx="6" fill="#FF7A00"/>
+  <!-- Ashoka-inspired emblem circle & Book -->
+  <circle cx="400" cy="132" r="14" fill="#FFFFFF"/>
+  <rect x="595" y="210" width="110" height="135" rx="14" fill="#0F172A" fill-opacity="0.35"/>
+  <rect x="585" y="200" width="110" height="135" rx="14" fill="#FFFFFF"/>
+  <rect x="605" y="228" width="70" height="10" rx="5" fill="#0052CC"/>
+  <rect x="605" y="252" width="55" height="8" rx="4" fill="#94A3B8"/>
+  <rect x="605" y="272" width="65" height="8" rx="4" fill="#94A3B8"/>
+  <circle cx="640" cy="305" r="12" fill="#FF7A00"/>
+</svg>

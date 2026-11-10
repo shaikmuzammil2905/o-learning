@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --brand-blue: #0052CC;
+    --brand-blue-dark: #00338D;
+    --brand-blue-bright: #0B6FF4;
+    --brand-orange: #FF7A00;
+    --brand-orange-hover: #E66D00;
+    --brand-navy: #0F172A;
+    --brand-bg: #F8FAFC;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  }
+}
+
+/* Animated Hero Background Movements for image copy 2 (mobile) & image copy 3 (desktop) */
+@keyframes heroDesktopPan {
+  0% {
+    transform: scale(1.0) translate3d(0px, 0px, 0);
+  }
+  50% {
+    transform: scale(1.035) translate3d(-8px, -4px, 0);
+  }
+  100% {
+    transform: scale(1.0) translate3d(0px, 0px, 0);
+  }
+}
+
+@keyframes heroMobileBreathe {
+  0% {
+    transform: scale(1.0) translate3d(0px, 0px, 0);
+  }
+  50% {
+    transform: scale(1.045) translate3d(0px, -6px, 0);
+  }
+  100% {
+    transform: scale(1.0) translate3d(0px, 0px, 0);
+  }
+}
+
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes pulseRing {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(1.25);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.25);
+    opacity: 0;
+  }
+}
+
+.animate-hero-desktop {
+  animation: heroDesktopPan 14s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-hero-mobile {
+  animation: heroMobileBreathe 12s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-float-slow {
+  animation: floatSlow 4.5s ease-in-out infinite;
+}
+
+.animate-pulse-ring {
+  animation: pulseRing 2.2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+}
+
+/* Certificate Print Styling */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #certificate-print-area,
+  #certificate-print-area * {
+    visibility: visible;
+  }
+  #certificate-print-area {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    box-shadow: none !important;
+  }
+}
