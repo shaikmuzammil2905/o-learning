@@ -1,37 +1,46 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" fill="none">
   <defs>
-    <linearGradient id="bg2" x1="0" y1="0" x2="800" y2="450" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#00359E"/>
-      <stop offset="100%" stop-color="#0D6EFD"/>
+    <linearGradient id="ce-bg" x1="0" y1="0" x2="800" y2="450" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00256E"/>
+      <stop offset="100%" stop-color="#0B6FF4"/>
     </linearGradient>
-    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFB347"/>
+    <linearGradient id="ce-gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFC247"/>
       <stop offset="100%" stop-color="#FF6B00"/>
     </linearGradient>
   </defs>
-  <rect width="800" height="450" rx="24" fill="url(#bg2)"/>
-  <circle cx="640" cy="110" r="170" fill="#FFFFFF" fill-opacity="0.06"/>
-  <circle cx="140" cy="360" r="140" fill="#FF7A00" fill-opacity="0.16"/>
-  <!-- Exam Checklist Card -->
-  <rect x="145" y="85" width="250" height="285" rx="22" fill="#FFFFFF"/>
-  <rect x="175" y="115" width="130" height="14" rx="7" fill="#0052CC"/>
-  <circle cx="190" cy="170" r="14" fill="#22C55E"/>
-  <path d="M184 170L189 175L197 165" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
-  <rect x="216" y="164" width="145" height="12" rx="6" fill="#CBD5E1"/>
-  <circle cx="190" cy="222" r="14" fill="#22C55E"/>
-  <path d="M184 222L189 227L197 217" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
-  <rect x="216" y="216" width="125" height="12" rx="6" fill="#CBD5E1"/>
-  <circle cx="190" cy="274" r="14" fill="#FF7A00"/>
-  <path d="M184 274L189 279L197 269" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
-  <rect x="216" y="268" width="138" height="12" rx="6" fill="#CBD5E1"/>
-  <rect x="175" y="316" width="190" height="24" rx="12" fill="#EFF6FF"/>
-  <rect x="175" y="316" width="148" height="24" rx="12" fill="#FF7A00"/>
-  <!-- Trophy -->
-  <path d="M480 110H620V195C620 236 588 268 550 268C512 268 480 236 480 195V110Z" fill="url(#gold)"/>
-  <path d="M480 130H445C445 170 460 190 480 195" stroke="#FFB347" stroke-width="12" stroke-linecap="round"/>
-  <path d="M620 130H655C655 170 640 190 620 195" stroke="#FFB347" stroke-width="12" stroke-linecap="round"/>
-  <rect x="532" y="266" width="36" height="48" fill="#FF8C1A"/>
-  <rect x="495" y="312" width="110" height="26" rx="10" fill="#FFFFFF"/>
-  <path d="M550 145L560 166L583 169L566 185L570 208L550 197L530 208L534 185L517 169L540 166L550 145Z" fill="#FFFFFF"/>
+  <rect width="800" height="450" fill="url(#ce-bg)"/>
+  <circle cx="630" cy="110" r="185" fill="#FFFFFF" fill-opacity="0.06"/>
+  <circle cx="150" cy="390" r="160" fill="#FF7A00" fill-opacity="0.18"/>
+  <!-- Stacked Study Books -->
+  <rect x="85" y="315" width="190" height="36" rx="10" fill="#FF7A00"/>
+  <rect x="102" y="326" width="120" height="10" rx="5" fill="#FFFFFF" fill-opacity="0.8"/>
+  <rect x="100" y="275" width="175" height="36" rx="10" fill="#FFFFFF"/>
+  <rect x="116" y="287" width="110" height="10" rx="5" fill="#0052CC"/>
+  <!-- Exam OMR & Progress Card -->
+  <rect x="115" y="65" width="295" height="230" rx="22" fill="#FFFFFF"/>
+  <rect x="142" y="92" width="145" height="14" rx="7" fill="#002B7A"/>
+  <circle cx="156" cy="140" r="13" fill="#22C55E"/>
+  <path d="M150 140L155 145L163 135" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <rect x="182" y="134" width="188" height="12" rx="6" fill="#E2E8F0"/>
+  <rect x="182" y="134" width="150" height="12" rx="6" fill="#0052CC"/>
+  <circle cx="156" cy="186" r="13" fill="#22C55E"/>
+  <path d="M150 186L155 191L163 181" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <rect x="182" y="180" width="188" height="12" rx="6" fill="#E2E8F0"/>
+  <rect x="182" y="180" width="166" height="12" rx="6" fill="#FF7A00"/>
+  <circle cx="156" cy="232" r="13" fill="#FF7A00"/>
+  <path d="M150 232L155 237L163 227" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <rect x="182" y="226" width="140" height="12" rx="6" fill="#CBD5E1"/>
+  <!-- Winner Trophy + Timer Clock -->
+  <circle cx="575" cy="225" r="138" fill="#FFFFFF" fill-opacity="0.1"/>
+  <path d="M505 112H645V202C645 245 612 278 575 278C538 278 505 245 505 202V112Z" fill="url(#ce-gold)"/>
+  <path d="M505 134H470C470 176 485 198 505 204" stroke="#FFC247" stroke-width="12" stroke-linecap="round"/>
+  <path d="M645 134H680C680 176 665 198 645 204" stroke="#FFC247" stroke-width="12" stroke-linecap="round"/>
+  <rect x="556" y="276" width="38" height="48" fill="#FF8C1A"/>
+  <rect x="515" y="322" width="120" height="28" rx="12" fill="#FFFFFF"/>
+  <path d="M575 148L586 171L611 174L592 192L597 217L575 205L553 217L558 192L539 174L564 171L575 148Z" fill="#FFFFFF"/>
+  <!-- Floating Clock Badge -->
+  <circle cx="670" cy="100" r="40" fill="#FFFFFF"/>
+  <circle cx="670" cy="100" r="30" stroke="#0052CC" stroke-width="5"/>
+  <path d="M670 84V101L682 108" stroke="#FF7A00" stroke-width="5" stroke-linecap="round"/>
 </svg>
-

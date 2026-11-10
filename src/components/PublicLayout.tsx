@@ -212,17 +212,20 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 pb-20 md:pb-0">{children}</main>
 
-      {/* Footer matching reference layout */}
-      <footer className="bg-white border-t border-slate-200 pt-12 pb-24 md:pb-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* Blue & Orange Branded Footer */}
+      <footer className="relative bg-gradient-to-br from-[#001F5C] via-[#00389E] to-[#0052CC] text-white border-t-4 border-[#FF7A00] pt-12 pb-24 md:pb-10 overflow-hidden">
+        <div className="absolute -right-24 -top-24 w-72 h-72 rounded-full bg-[#FF7A00]/15 blur-2xl pointer-events-none" />
+        <div className="absolute -left-24 bottom-0 w-72 h-72 rounded-full bg-blue-400/10 blur-2xl pointer-events-none" />
+
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-10">
             {/* Brand + Socials */}
             <div>
-              <BrandLogo />
-              <p className="text-xs text-slate-500 mt-3 leading-relaxed">
+              <BrandLogo dark />
+              <p className="text-xs text-blue-100/90 mt-3.5 leading-relaxed">
                 Quality, affordable online education for every Indian learner. Founded in {cms.brand.foundedYear} in {cms.brand.location}.
               </p>
-              <p className="text-sm font-bold text-[#002B7A] mt-4">Follow Us:</p>
+              <p className="text-sm font-bold text-[#FF9B3D] mt-4">Follow Us:</p>
               <div className="flex items-center gap-2.5 mt-2.5">
                 {[
                   { label: 'Facebook', bg: 'bg-[#1877F2]', text: 'f', href: '#facebook' },
@@ -238,7 +241,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                       e.preventDefault();
                       navigate('/contact');
                     }}
-                    className={`w-8 h-8 rounded-full ${s.bg} text-white text-xs font-bold flex items-center justify-center shadow-sm hover:scale-110 transition`}
+                    className={`w-9 h-9 rounded-full ${s.bg} text-white text-xs font-bold flex items-center justify-center shadow-md ring-2 ring-white/20 hover:scale-110 transition`}
                   >
                     {s.text}
                   </a>
@@ -247,9 +250,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* Quick Links */}
-            <div className="sm:border-l sm:border-slate-200 sm:pl-6">
-              <h4 className="font-display font-bold text-base text-[#002B7A] mb-3.5">Quick Links</h4>
-              <ul className="space-y-2 text-sm text-slate-600">
+            <div className="sm:border-l sm:border-white/15 sm:pl-6">
+              <h4 className="font-display font-bold text-base text-[#FF9B3D] mb-3.5">Quick Links</h4>
+              <ul className="space-y-2 text-sm text-blue-100">
                 {[
                   { to: '/', label: 'Home' },
                   { to: '/courses', label: 'Courses' },
@@ -259,8 +262,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   { to: '/contact', label: 'Contact Us' },
                 ].map((l) => (
                   <li key={l.to}>
-                    <Link to={l.to} className="inline-flex items-center gap-1.5 hover:text-[#0052CC] transition">
-                      <ChevronRight className="w-3.5 h-3.5 text-[#0052CC]" />
+                    <Link to={l.to} className="inline-flex items-center gap-1.5 hover:text-[#FF9B3D] transition">
+                      <ChevronRight className="w-3.5 h-3.5 text-[#FF7A00]" />
                       {l.label}
                     </Link>
                   </li>
@@ -269,9 +272,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* Popular Courses */}
-            <div className="sm:border-l sm:border-slate-200 sm:pl-6">
-              <h4 className="font-display font-bold text-base text-[#002B7A] mb-3.5">Popular Courses</h4>
-              <ul className="space-y-2 text-sm text-slate-600">
+            <div className="sm:border-l sm:border-white/15 sm:pl-6">
+              <h4 className="font-display font-bold text-base text-[#FF9B3D] mb-3.5">Popular Courses</h4>
+              <ul className="space-y-2 text-sm text-blue-100">
                 {(courses.length > 0
                   ? courses.slice(0, 5)
                   : [
@@ -285,9 +288,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   <li key={c.slug}>
                     <Link
                       to={`/courses/${c.slug}`}
-                      className="inline-flex items-center gap-1.5 hover:text-[#0052CC] transition"
+                      className="inline-flex items-center gap-1.5 hover:text-[#FF9B3D] transition"
                     >
-                      <ChevronRight className="w-3.5 h-3.5 text-[#0052CC]" />
+                      <ChevronRight className="w-3.5 h-3.5 text-[#FF7A00]" />
                       {c.title}
                     </Link>
                   </li>
@@ -296,15 +299,15 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* Contact Us */}
-            <div className="sm:border-l sm:border-slate-200 sm:pl-6">
-              <h4 className="font-display font-bold text-base text-[#002B7A] mb-3.5">Contact Us</h4>
-              <ul className="space-y-3 text-sm text-slate-700">
+            <div className="sm:border-l sm:border-white/15 sm:pl-6">
+              <h4 className="font-display font-bold text-base text-[#FF9B3D] mb-3.5">Contact Us</h4>
+              <ul className="space-y-3 text-sm text-blue-50">
                 <li>
                   <a
                     href={`tel:${cms.contact.phone}`}
-                    className="inline-flex items-center gap-2.5 hover:text-[#0052CC]"
+                    className="inline-flex items-center gap-2.5 hover:text-[#FF9B3D] transition"
                   >
-                    <Phone className="w-4 h-4 text-[#0052CC] shrink-0" />
+                    <Phone className="w-4 h-4 text-[#FF7A00] shrink-0" />
                     <span>{cms.contact.phone}</span>
                   </a>
                 </li>
@@ -313,32 +316,34 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                     href={whatsappUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-2.5 hover:text-emerald-600"
+                    className="inline-flex items-center gap-2.5 hover:text-emerald-300 transition"
                   >
-                    <MessageCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <MessageCircle className="w-4 h-4 text-emerald-400 shrink-0" />
                     <span>{cms.contact.whatsapp}</span>
                   </a>
                 </li>
                 <li>
                   <a
                     href={`mailto:${cms.contact.email}`}
-                    className="inline-flex items-center gap-2.5 hover:text-[#0052CC] break-all"
+                    className="inline-flex items-center gap-2.5 hover:text-[#FF9B3D] break-all transition"
                   >
-                    <Mail className="w-4 h-4 text-[#0052CC] shrink-0" />
+                    <Mail className="w-4 h-4 text-[#FF7A00] shrink-0" />
                     <span>{cms.contact.email}</span>
                   </a>
                 </li>
                 <li className="inline-flex items-start gap-2.5">
-                  <MapPin className="w-4 h-4 text-[#0052CC] shrink-0 mt-0.5" />
+                  <MapPin className="w-4 h-4 text-[#FF7A00] shrink-0 mt-0.5" />
                   <span>{cms.contact.location}</span>
                 </li>
               </ul>
             </div>
           </div>
 
-          <div className="mt-10 pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+          <div className="mt-10 pt-6 border-t border-white/15 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-blue-100/80">
             <p>© {new Date().getFullYear()} O-LEARNING PLATFORM. All rights reserved.</p>
-            <p>{cms.brand.tagline} · {cms.contact.location}</p>
+            <p className="text-[#FF9B3D] font-semibold">
+              {cms.brand.tagline} · {cms.contact.location}
+            </p>
           </div>
         </div>
       </footer>

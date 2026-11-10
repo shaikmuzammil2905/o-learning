@@ -1,40 +1,47 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" fill="none">
   <defs>
-    <linearGradient id="abg" x1="0" y1="0" x2="900" y2="540" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#00308F"/>
+    <linearGradient id="ac-bg" x1="0" y1="0" x2="900" y2="540" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00256E"/>
       <stop offset="55%" stop-color="#0052CC"/>
-      <stop offset="100%" stop-color="#007BFF"/>
+      <stop offset="100%" stop-color="#0A7BFF"/>
     </linearGradient>
+    <radialGradient id="ac-glow" cx="0.3" cy="0.3" r="0.6">
+      <stop offset="0%" stop-color="#60A5FA" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#0052CC" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <rect width="900" height="540" rx="28" fill="url(#abg)"/>
-  <circle cx="770" cy="110" r="170" fill="#FF7A00" fill-opacity="0.22"/>
-  <circle cx="140" cy="440" r="180" fill="#FFFFFF" fill-opacity="0.06"/>
-  <!-- Live Studio Screen -->
-  <rect x="90" y="80" width="460" height="310" rx="24" fill="#FFFFFF"/>
-  <rect x="114" y="104" width="412" height="220" rx="16" fill="#EFF6FF"/>
-  <rect x="134" y="124" width="76" height="28" rx="14" fill="#EF4444"/>
-  <circle cx="152" cy="138" r="5" fill="#FFFFFF"/>
-  <!-- Instructor Figure -->
-  <circle cx="320" cy="182" r="44" fill="#0052CC"/>
-  <path d="M242 296C242 252 276 226 320 226C364 226 398 252 398 296H242Z" fill="#0052CC"/>
-  <rect x="114" y="340" width="220" height="16" rx="8" fill="#CBD5E1"/>
-  <rect x="354" y="340" width="172" height="16" rx="8" fill="#FF7A00"/>
-  <!-- Floating Student Cards -->
-  <rect x="580" y="110" width="240" height="110" rx="20" fill="#FFFFFF"/>
-  <circle cx="630" cy="165" r="28" fill="#FF7A00"/>
-  <rect x="674" y="148" width="118" height="12" rx="6" fill="#0F172A"/>
-  <rect x="674" y="172" width="84" height="10" rx="5" fill="#94A3B8"/>
+  <rect width="900" height="540" rx="28" fill="url(#ac-bg)"/>
+  <rect width="900" height="540" rx="28" fill="url(#ac-glow)"/>
+  <circle cx="770" cy="110" r="175" fill="#FF7A00" fill-opacity="0.22"/>
+  <circle cx="140" cy="450" r="185" fill="#FFFFFF" fill-opacity="0.06"/>
+  <!-- Digital Classroom Studio Window -->
+  <rect x="75" y="65" width="485" height="325" rx="26" fill="#FFFFFF"/>
+  <rect x="100" y="90" width="435" height="232" rx="18" fill="#EFF6FF"/>
+  <rect x="122" y="110" width="84" height="28" rx="14" fill="#EF4444"/>
+  <circle cx="140" cy="124" r="5" fill="#FFFFFF"/>
+  <rect x="152" y="120" width="42" height="8" rx="4" fill="#FFFFFF"/>
+  <!-- Faculty Mentor -->
+  <circle cx="318" cy="178" r="46" fill="#0052CC"/>
+  <path d="M235 322C235 268 272 236 318 236C364 236 401 268 401 322H235Z" fill="#1D4ED8"/>
+  <!-- Progress Footer in Studio -->
+  <rect x="100" y="340" width="240" height="16" rx="8" fill="#CBD5E1"/>
+  <rect x="360" y="340" width="175" height="16" rx="8" fill="#FF7A00"/>
+  <!-- Interactive Metric Cards -->
+  <rect x="588" y="92" width="242" height="114" rx="22" fill="#FFFFFF"/>
+  <circle cx="640" cy="149" r="30" fill="#FF7A00"/>
+  <path d="M630 149L638 157L653 141" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <rect x="686" y="130" width="118" height="13" rx="6.5" fill="#002B7A"/>
+  <rect x="686" y="154" width="86" height="10" rx="5" fill="#94A3B8"/>
 
-  <rect x="580" y="245" width="240" height="110" rx="20" fill="#FFFFFF"/>
-  <circle cx="630" cy="300" r="28" fill="#22C55E"/>
-  <path d="M618 300L627 309L643 291" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
-  <rect x="674" y="283" width="118" height="12" rx="6" fill="#0F172A"/>
-  <rect x="674" y="307" width="96" height="10" rx="5" fill="#94A3B8"/>
+  <rect x="588" y="232" width="242" height="114" rx="22" fill="#FFFFFF"/>
+  <circle cx="640" cy="289" r="30" fill="#22C55E"/>
+  <path d="M627 289L636 298L653 279" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <rect x="686" y="270" width="118" height="13" rx="6.5" fill="#002B7A"/>
+  <rect x="686" y="294" width="96" height="10" rx="5" fill="#94A3B8"/>
 
   <!-- Bottom Hyderabad Pill -->
-  <rect x="180" y="425" width="540" height="58" rx="29" fill="#FFFFFF" fill-opacity="0.14" stroke="#FFFFFF" stroke-opacity="0.3" stroke-width="2"/>
-  <circle cx="222" cy="454" r="14" fill="#FF7A00"/>
-  <rect x="252" y="446" width="290" height="14" rx="7" fill="#FFFFFF"/>
-  <rect x="560" y="446" width="120" height="14" rx="7" fill="#FF8C1A"/>
+  <rect x="150" y="422" width="600" height="60" rx="30" fill="#FFFFFF" fill-opacity="0.16" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="2"/>
+  <circle cx="195" cy="452" r="14" fill="#FF7A00"/>
+  <rect x="228" y="444" width="320" height="15" rx="7.5" fill="#FFFFFF"/>
+  <rect x="568" y="444" width="140" height="15" rx="7.5" fill="#FF8C1A"/>
 </svg>
-

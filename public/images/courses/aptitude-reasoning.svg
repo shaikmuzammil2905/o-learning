@@ -1,25 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" fill="none">
   <defs>
-    <linearGradient id="bg5" x1="0" y1="0" x2="800" y2="450" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#0041BA"/>
+    <linearGradient id="ar-bg" x1="0" y1="0" x2="800" y2="450" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00359E"/>
       <stop offset="100%" stop-color="#1976D2"/>
     </linearGradient>
   </defs>
-  <rect width="800" height="450" rx="24" fill="url(#bg5)"/>
-  <circle cx="150" cy="100" r="120" fill="#FF7A00" fill-opacity="0.18"/>
-  <!-- Logic Gears & Analytical Chart Card -->
-  <circle cx="255" cy="225" r="95" fill="#FFFFFF" fill-opacity="0.15"/>
-  <circle cx="255" cy="225" r="65" stroke="#FF8C1A" stroke-width="20" stroke-dasharray="26 16"/>
-  <circle cx="255" cy="225" r="32" fill="#FFFFFF"/>
-  <circle cx="375" cy="145" r="42" stroke="#FFFFFF" stroke-width="14" stroke-dasharray="16 12"/>
-  <circle cx="375" cy="145" r="18" fill="#FF7A00"/>
-  <!-- Chart & Math Card -->
-  <rect x="445" y="105" width="235" height="240" rx="24" fill="#FFFFFF"/>
-  <rect x="485" y="245" width="28" height="65" rx="8" fill="#93C5FD"/>
-  <rect x="528" y="205" width="28" height="105" rx="8" fill="#0052CC"/>
-  <rect x="571" y="175" width="28" height="135" rx="8" fill="#FF7A00"/>
-  <rect x="614" y="145" width="28" height="165" rx="8" fill="#22C55E"/>
-  <path d="M495 190L540 165L585 142L628 122" stroke="#0052CC" stroke-width="5" stroke-linecap="round"/>
-  <circle cx="628" cy="122" r="8" fill="#FF7A00"/>
+  <rect width="800" height="450" fill="url(#ar-bg)"/>
+  <circle cx="150" cy="110" r="135" fill="#FF7A00" fill-opacity="0.2"/>
+  <!-- Logic Gears & Problem Solving Network -->
+  <circle cx="240" cy="230" r="100" fill="#FFFFFF" fill-opacity="0.14"/>
+  <circle cx="240" cy="230" r="68" stroke="#FF8C1A" stroke-width="22" stroke-dasharray="26 16"/>
+  <circle cx="240" cy="230" r="34" fill="#FFFFFF"/>
+  <circle cx="368" cy="142" r="46" stroke="#FFFFFF" stroke-width="14" stroke-dasharray="16 12"/>
+  <circle cx="368" cy="142" r="20" fill="#FF7A00"/>
+  <!-- Quantitative Analytics Card -->
+  <rect x="435" y="88" width="265" height="274" rx="24" fill="#FFFFFF"/>
+  <rect x="468" y="116" width="130" height="12" rx="6" fill="#002B7A"/>
+  <rect x="474" y="255" width="32" height="72" rx="8" fill="#BFDBFE"/>
+  <rect x="522" y="215" width="32" height="112" rx="8" fill="#0052CC"/>
+  <rect x="570" y="182" width="32" height="145" rx="8" fill="#FF7A00"/>
+  <rect x="618" y="148" width="32" height="179" rx="8" fill="#22C55E"/>
+  <path d="M485 202L538 175L586 150L634 126" stroke="#002B7A" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="634" cy="126" r="8" fill="#FF7A00"/>
 </svg>
-

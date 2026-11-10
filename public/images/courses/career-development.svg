@@ -1,24 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" fill="none">
   <defs>
-    <linearGradient id="bg8" x1="0" y1="0" x2="800" y2="450" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#003EB3"/>
+    <linearGradient id="cd-bg" x1="0" y1="0" x2="800" y2="450" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00338D"/>
       <stop offset="100%" stop-color="#0A7BFF"/>
     </linearGradient>
   </defs>
-  <rect width="800" height="450" rx="24" fill="url(#bg8)"/>
+  <rect width="800" height="450" fill="url(#cd-bg)"/>
   <circle cx="150" cy="360" r="150" fill="#FF7A00" fill-opacity="0.18"/>
-  <!-- Presentation Board & Growth -->
-  <rect x="155" y="85" width="380" height="250" rx="22" fill="#FFFFFF"/>
-  <rect x="190" y="245" width="42" height="55" rx="8" fill="#BFDBFE"/>
-  <rect x="252" y="205" width="42" height="95" rx="8" fill="#60A5FA"/>
-  <rect x="314" y="165" width="42" height="135" rx="8" fill="#0052CC"/>
-  <rect x="376" y="125" width="42" height="175" rx="8" fill="#FF7A00"/>
-  <path d="M200 220L270 180L335 148L445 105" stroke="#0F172A" stroke-width="6" stroke-linecap="round"/>
-  <path d="M425 102L452 103L441 128" stroke="#0F172A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Career Growth Dashboard -->
+  <rect x="115" y="75" width="405" height="275" rx="24" fill="#FFFFFF"/>
+  <rect x="155" y="245" width="46" height="65" rx="8" fill="#BFDBFE"/>
+  <rect x="220" y="205" width="46" height="105" rx="8" fill="#60A5FA"/>
+  <rect x="285" y="165" width="46" height="145" rx="8" fill="#0052CC"/>
+  <rect x="350" y="122" width="46" height="188" rx="8" fill="#FF7A00"/>
+  <path d="M168 220L242 180L310 148L445 102" stroke="#002B7A" stroke-width="6" stroke-linecap="round"/>
+  <path d="M425 99L452 100L441 125" stroke="#002B7A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
   <!-- Target Bullseye Badge -->
-  <circle cx="590" cy="245" r="88" fill="#FFFFFF"/>
-  <circle cx="590" cy="245" r="64" fill="#FF7A00"/>
-  <circle cx="590" cy="245" r="40" fill="#FFFFFF"/>
-  <circle cx="590" cy="245" r="18" fill="#0052CC"/>
+  <circle cx="595" cy="240" r="95" fill="#FFFFFF"/>
+  <circle cx="595" cy="240" r="70" fill="#FF7A00"/>
+  <circle cx="595" cy="240" r="44" fill="#FFFFFF"/>
+  <circle cx="595" cy="240" r="20" fill="#0052CC"/>
 </svg>
-
