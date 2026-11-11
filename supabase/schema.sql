@@ -5,19 +5,6 @@
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Helper function to check admin role safely inside RLS policies
-CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS BOOLEAN
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.users
-    WHERE auth_uid = auth.uid() AND UPPER(role) = 'ADMIN' AND is_active = TRUE
-  );
-$$;
-
 -- 1. USERS
 CREATE TABLE IF NOT EXISTS public.users (
   id BIGSERIAL PRIMARY KEY,
@@ -241,6 +228,19 @@ CREATE TABLE IF NOT EXISTS public.contact_enquiries (
 -- ============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- ============================================================================
+
+-- Helper function placed after public.users exists
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.users
+    WHERE auth_uid = auth.uid() AND UPPER(role) = 'ADMIN' AND is_active = TRUE
+  );
+$$;
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
