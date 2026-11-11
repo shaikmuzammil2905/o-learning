@@ -37,6 +37,7 @@ import { AdminCourseModal, type CourseEditorInitial } from '../../components/adm
 import { AdminQuizModal, type QuizRow } from '../../components/admin/AdminQuizModal';
 import { ImageUploader } from '../../components/admin/ImageUploader';
 import { api } from '../../lib/api';
+import { broadcastPlatformUpdate, subscribePlatformUpdates } from '../../lib/realtime';
 import { useSite } from '../../context/SiteContext';
 
 export const ADMIN_LINKS: SidebarLink[] = [
@@ -97,6 +98,14 @@ interface AdminDashboardData {
     revenueThisMonth: number;
     revenuePrevMonth: number;
     revenueChangePct: number | null;
+    successfulPaymentsCount?: number;
+    failedPaymentsCount?: number;
+    cancelledPaymentsCount?: number;
+    refundedPaymentsCount?: number;
+    referralsCount?: number;
+    certificatesCount?: number;
+    quizAttemptsCount?: number;
+    redemptionRequestsCount?: number;
     liveClassesCount: number;
     pendingPayments: number;
     coursesMetric?: MetricWithGrowth;
@@ -118,9 +127,20 @@ const btnGhost =
 
 function GrowthBadge({ pct }: { pct: number | null | undefined }) {
   if (pct === null || pct === undefined) {
-    return <span className="text-[11px] font-medium text-slate-400">Baseline tracking</span>;
+    return (
+      <span className="inline-flex items-center rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-slate-300">
+        0% (first mo)
+      </span>
+    );
   }
-  const positive = pct >= 0;
+  if (pct === 0) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-slate-300">
+        0% vs last mo
+      </span>
+    );
+  }
+  const positive = pct > 0;
   return (
     <span
       className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-bold ${
@@ -145,6 +165,8 @@ function PaymentStatusBadge({ status, label }: { status: string; label?: string 
       ? 'Processing'
       : s === 'failed'
       ? 'Failed'
+      : s === 'cancelled'
+      ? 'Cancelled'
       : s === 'refunded'
       ? 'Refunded'
       : status);
@@ -156,7 +178,7 @@ function PaymentStatusBadge({ status, label }: { status: string; label?: string 
       ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
       : s === 'pending'
       ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-      : s === 'failed'
+      : s === 'failed' || s === 'cancelled'
       ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
       : 'bg-purple-500/15 text-purple-300 border-purple-500/30';
 
@@ -264,8 +286,8 @@ export function AdminPortal({ section }: { section: AdminSection }) {
     setTimeout(() => setToast(''), 3200);
   };
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [cats, facs, cs] = await Promise.all([
         api<Array<Record<string, unknown>>>('/api/admin/categories').catch(() => []),
@@ -316,7 +338,7 @@ export function AdminPortal({ section }: { section: AdminSection }) {
         if (normalizedSection === 'batches') setSettingsTab('batches');
       }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [normalizedSection, paymentStatusFilter, redemptionFilter]);
 
@@ -324,18 +346,19 @@ export function AdminPortal({ section }: { section: AdminSection }) {
     loadData();
   }, [loadData]);
 
+  // Real-time Admin auto-sync (background poll every 5s + BroadcastChannel + Supabase Realtime)
   useEffect(() => {
-    if (normalizedSection !== 'payments' || !autoPollPayments) return;
-    const t = setInterval(async () => {
-      try {
-        const rows = await api<Array<Record<string, unknown>>>(`/api/admin/payments?status=${paymentStatusFilter}`);
-        setPayments(rows);
-      } catch {
-        // ignore polling error
-      }
-    }, 8000);
-    return () => clearInterval(t);
-  }, [normalizedSection, autoPollPayments, paymentStatusFilter]);
+    const unsub = subscribePlatformUpdates(() => {
+      loadData(true);
+    });
+    const t = setInterval(() => {
+      loadData(true);
+    }, 5000);
+    return () => {
+      unsub();
+      clearInterval(t);
+    };
+  }, [loadData]);
 
   // Filtered Courses + Pagination
   const filteredCourses = useMemo(() => {
@@ -385,13 +408,15 @@ export function AdminPortal({ section }: { section: AdminSection }) {
     });
     notify(Number(c.is_published) === 1 ? 'Course moved to Draft.' : 'Course published to catalog.');
     refreshPublicSite();
-    loadData();
+    broadcastPlatformUpdate('course');
+    loadData(true);
   };
 
   const duplicateCourse = async (id: unknown) => {
     await api(`/api/admin/courses/${id}/duplicate`, { method: 'POST' });
     notify('Course duplicated as Draft.');
-    loadData();
+    broadcastPlatformUpdate('course');
+    loadData(true);
   };
 
   const deleteCourse = async (id: unknown) => {
@@ -399,7 +424,8 @@ export function AdminPortal({ section }: { section: AdminSection }) {
     await api(`/api/admin/courses/${id}`, { method: 'DELETE' });
     notify('Course deleted.');
     refreshPublicSite();
-    loadData();
+    broadcastPlatformUpdate('course');
+    loadData(true);
   };
 
   const saveCategory = async (e: React.FormEvent) => {
@@ -422,7 +448,8 @@ export function AdminPortal({ section }: { section: AdminSection }) {
     }
     setCatModalOpen(false);
     refreshPublicSite();
-    loadData();
+    broadcastPlatformUpdate('category');
+    loadData(true);
   };
 
   const saveCmsSettings = async (e?: React.FormEvent) => {
@@ -430,6 +457,7 @@ export function AdminPortal({ section }: { section: AdminSection }) {
     if (!cms) return;
     await api('/api/admin/cms', { method: 'PUT', body: JSON.stringify(cms) });
     refreshPublicSite();
+    broadcastPlatformUpdate('cms');
     notify('Platform settings & live CMS saved.');
   };
 
@@ -541,6 +569,25 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                 </div>
               </div>
 
+              {/* Real-Time Platform Counters (All live from DB — 0 when empty) */}
+              <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 xl:grid-cols-8">
+                {[
+                  { label: 'Enrollments', value: dashboard.metrics.enrollmentsCount ?? 0, color: 'text-blue-400' },
+                  { label: 'Success Pays', value: dashboard.metrics.successfulPaymentsCount ?? 0, color: 'text-emerald-400' },
+                  { label: 'Pending Pays', value: dashboard.metrics.pendingPayments ?? 0, color: 'text-amber-400' },
+                  { label: 'Failed Pays', value: dashboard.metrics.failedPaymentsCount ?? 0, color: 'text-rose-400' },
+                  { label: 'Referrals', value: dashboard.metrics.referralsCount ?? 0, color: 'text-[#FF7A00]' },
+                  { label: 'Certificates', value: dashboard.metrics.certificatesCount ?? 0, color: 'text-cyan-400' },
+                  { label: 'Quiz Attempts', value: dashboard.metrics.quizAttemptsCount ?? 0, color: 'text-purple-400' },
+                  { label: 'Redemptions', value: dashboard.metrics.redemptionRequestsCount ?? 0, color: 'text-slate-200' },
+                ].map((stat) => (
+                  <div key={stat.label} className={`${cardCls} px-3.5 py-3`}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{stat.label}</p>
+                    <p className={`mt-1 font-display text-xl font-extrabold ${stat.color}`}>{stat.value}</p>
+                  </div>
+                ))}
+              </div>
+
               {/* Quick Actions */}
               <div className={`${cardCls} p-5`}>
                 <h2 className="font-display text-sm font-bold uppercase tracking-wider text-slate-300 mb-3">
@@ -605,26 +652,34 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/70">
-                        {dashboard.coursePerformance.map((cp) => (
-                          <tr key={cp.id} className="hover:bg-slate-800/30">
-                            <td className="py-3 pr-3 font-semibold text-slate-100">{cp.title}</td>
-                            <td className="py-3 px-3">
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                                  cp.is_published
-                                    ? 'bg-emerald-500/15 text-emerald-300'
-                                    : 'bg-slate-700 text-slate-300'
-                                }`}
-                              >
-                                {cp.is_published ? 'Published' : 'Draft'}
-                              </span>
-                            </td>
-                            <td className="py-3 px-3 text-slate-300 font-semibold">{cp.enrollments}</td>
-                            <td className="py-3 pl-3 text-right font-bold text-emerald-400">
-                              ₹{Number(cp.revenue || 0).toLocaleString('en-IN')}
+                        {dashboard.coursePerformance.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="py-10 text-center text-slate-400">
+                              No course enrollment data available yet. Create a course to start tracking.
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          dashboard.coursePerformance.map((cp) => (
+                            <tr key={cp.id} className="hover:bg-slate-800/30">
+                              <td className="py-3 pr-3 font-semibold text-slate-100">{cp.title}</td>
+                              <td className="py-3 px-3">
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                    cp.is_published
+                                      ? 'bg-emerald-500/15 text-emerald-300'
+                                      : 'bg-slate-700 text-slate-300'
+                                  }`}
+                                >
+                                  {cp.is_published ? 'Published' : 'Draft'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-slate-300 font-semibold">{cp.enrollments}</td>
+                              <td className="py-3 pl-3 text-right font-bold text-emerald-400">
+                                ₹{Number(cp.revenue || 0).toLocaleString('en-IN')}
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -659,17 +714,21 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                   <div className={`${cardCls} p-5`}>
                     <h2 className="font-display text-base font-bold text-white mb-3">Recent Learner Enquiries</h2>
                     <div className="space-y-2.5 max-h-56 overflow-y-auto">
-                      {enquiries.slice(0, 5).map((eq) => (
-                        <div key={String(eq.id)} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-slate-100">{String(eq.name)}</span>
-                            <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-300">
-                              {String(eq.status)}
-                            </span>
+                      {enquiries.length === 0 ? (
+                        <p className="text-xs text-slate-400">No learner enquiries yet.</p>
+                      ) : (
+                        enquiries.slice(0, 5).map((eq) => (
+                          <div key={String(eq.id)} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-slate-100">{String(eq.name)}</span>
+                              <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-300">
+                                {String(eq.status)}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-slate-400 line-clamp-2">{String(eq.message)}</p>
                           </div>
-                          <p className="mt-1 text-slate-400 line-clamp-2">{String(eq.message)}</p>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
@@ -749,7 +808,14 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/80">
-                      {pagedCourses.map((c) => (
+                      {pagedCourses.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-slate-400">
+                            No courses available yet. Create your first course from Course Management.
+                          </td>
+                        </tr>
+                      ) : (
+                        pagedCourses.map((c) => (
                         <tr key={String(c.id)} className="hover:bg-slate-800/30">
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-3">
@@ -841,7 +907,8 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1092,7 +1159,14 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/80">
-                      {filteredUsers.map((u) => {
+                      {filteredUsers.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-12 text-center text-slate-400">
+                            No users found. Registered learners and instructors will appear here automatically.
+                          </td>
+                        </tr>
+                      ) : (
+                      filteredUsers.map((u) => {
                         const roleDisp =
                           u.role === 'admin' ? 'ADMIN' : u.role === 'faculty' ? 'FACULTY' : 'USER';
                         return (
@@ -1184,7 +1258,8 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                             </td>
                           </tr>
                         );
-                      })}
+                      })
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1226,7 +1301,14 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/80">
-                      {certificates.map((cert) => (
+                      {certificates.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-slate-400">
+                            0 certificates issued yet. Issue or award completion credentials as students finish courses.
+                          </td>
+                        </tr>
+                      ) : (
+                      certificates.map((cert) => (
                         <tr key={String(cert.id)} className="hover:bg-slate-800/30">
                           <td className="py-3 px-4 font-mono font-bold text-[#FF7A00]">{String(cert.certificate_code)}</td>
                           <td className="py-3 px-3 font-semibold text-slate-100">{String(cert.student_name)}</td>
@@ -1282,7 +1364,8 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1295,7 +1378,7 @@ export function AdminPortal({ section }: { section: AdminSection }) {
             <div className="space-y-5">
               <div className={`${cardCls} p-4 flex flex-wrap items-center justify-between gap-3`}>
                 <div className="flex flex-wrap gap-1.5">
-                  {['all', 'Created', 'Pending', 'Processing', 'Success', 'Failed', 'Refunded'].map((st) => (
+                  {['all', 'Created', 'Pending', 'Processing', 'Success', 'Failed', 'Cancelled', 'Refunded'].map((st) => (
                     <button
                       key={st}
                       type="button"
@@ -1320,7 +1403,7 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                     />
                     Auto-poll 8s
                   </label>
-                  <button type="button" onClick={loadData} className={btnGhost}>
+                  <button type="button" onClick={() => loadData(false)} className={btnGhost}>
                     <RefreshCw className="h-3.5 w-3.5" /> Refresh
                   </button>
                 </div>
@@ -1341,7 +1424,14 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/80">
-                      {payments.map((p) => (
+                      {payments.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-12 text-center text-slate-400">
+                            No payments found. Verified transactions will appear here automatically.
+                          </td>
+                        </tr>
+                      ) : (
+                      payments.map((p) => (
                         <tr key={String(p.id)} className="hover:bg-slate-800/30">
                           <td className="py-3 px-4">
                             <p className="font-mono font-bold text-slate-100">{String(p.order_ref)}</p>
@@ -1376,11 +1466,13 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                               <option value="Processing">Processing</option>
                               <option value="Success">Success</option>
                               <option value="Failed">Failed</option>
+                              <option value="Cancelled">Cancelled</option>
                               <option value="Refunded">Refunded</option>
                             </select>
                           </td>
                         </tr>
-                      ))}
+                      ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1503,7 +1595,7 @@ export function AdminPortal({ section }: { section: AdminSection }) {
             <div className="space-y-5">
               <div className={`${cardCls} p-4 flex flex-wrap items-center justify-between gap-3`}>
                 <div className="flex flex-wrap gap-1.5">
-                  {['all', 'pending', 'approved', 'paid', 'rejected'].map((st) => (
+                  {['all', 'Pending', 'Processing', 'Processed', 'Approved', 'Paid', 'Rejected', 'Failed'].map((st) => (
                     <button
                       key={st}
                       type="button"
@@ -1722,7 +1814,25 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                       className={inputCls}
                     />
                   </div>
-                  <div className="sm:col-span-2 flex justify-end pt-2">
+                  <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!window.confirm('Remove untouched seeded demo records (keeping real user/course data intact)?')) return;
+                        const res = await api<{ ok: boolean; removed: Record<string, number> }>('/api/admin/cleanup-demo', {
+                          method: 'POST',
+                        });
+                        notify(
+                          `Cleaned demo entries (${res.removed.courses || 0} courses, ${res.removed.users || 0} users, ${res.removed.payments || 0} payments).`
+                        );
+                        refreshPublicSite();
+                        broadcastPlatformUpdate('cleanup');
+                        loadData();
+                      }}
+                      className={btnGhost}
+                    >
+                      <RefreshCw className="h-3.5 w-3.5 text-amber-400" /> Clean Untouched Demo Data
+                    </button>
                     <button type="submit" className={btnPrimary}>
                       <Save className="h-4 w-4" /> Save Platform Settings
                     </button>
@@ -2055,7 +2165,8 @@ export function AdminPortal({ section }: { section: AdminSection }) {
         onSaved={() => {
           notify('Course saved.');
           refreshPublicSite();
-          loadData();
+          broadcastPlatformUpdate('course');
+          loadData(true);
         }}
       />
 
@@ -2067,7 +2178,9 @@ export function AdminPortal({ section }: { section: AdminSection }) {
         onClose={() => setQuizModalOpen(false)}
         onSaved={() => {
           notify('Quiz saved.');
-          loadData();
+          refreshPublicSite();
+          broadcastPlatformUpdate('quiz');
+          loadData(true);
         }}
       />
 

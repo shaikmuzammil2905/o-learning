@@ -2,14 +2,15 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import db from '../db.js';
+import db, { runSafeDemoCleanup } from '../db.js';
 import { hashPassword, requireAuth, requireRole } from '../auth.js';
 
 const router = Router();
 router.use(requireAuth, requireRole('admin'));
 
-function calcMonthlyDelta(thisMonth: number, prevMonth: number): number {
-  if (prevMonth === 0) return thisMonth > 0 ? 100 : 0;
+function calcMonthlyDelta(thisMonth: number, prevMonth: number): number | null {
+  // Handle division by zero cleanly: return 0 when both are zero, null when prior baseline is absent (never fake +100%)
+  if (prevMonth === 0) return thisMonth === 0 ? 0 : null;
   return Math.round(((thisMonth - prevMonth) / prevMonth) * 100);
 }
 
@@ -23,18 +24,32 @@ router.get('/dashboard', (_req, res) => {
   const publishedThisMonth = (db.prepare("SELECT COUNT(*) as c FROM courses WHERE is_published = 1 AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')").get() as { c: number }).c;
   const publishedPrevMonth = (db.prepare("SELECT COUNT(*) as c FROM courses WHERE is_published = 1 AND strftime('%Y-%m', created_at) = strftime('%Y-%m', date('now', '-1 month'))").get() as { c: number }).c;
 
-  const totalUsers = (db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c;
+  // Exclude root/bootstrap admin accounts so user KPI honestly starts at 0 before customers register
+  const totalUsers = (db.prepare("SELECT COUNT(*) as c FROM users WHERE role != 'admin'").get() as { c: number }).c;
   const totalStudents = (db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'student'").get() as { c: number }).c;
-  const usersThisMonth = (db.prepare("SELECT COUNT(*) as c FROM users WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')").get() as { c: number }).c;
-  const usersPrevMonth = (db.prepare("SELECT COUNT(*) as c FROM users WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', date('now', '-1 month'))").get() as { c: number }).c;
+  const usersThisMonth = (db.prepare("SELECT COUNT(*) as c FROM users WHERE role != 'admin' AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')").get() as { c: number }).c;
+  const usersPrevMonth = (db.prepare("SELECT COUNT(*) as c FROM users WHERE role != 'admin' AND strftime('%Y-%m', created_at) = strftime('%Y-%m', date('now', '-1 month'))").get() as { c: number }).c;
 
+  // ONLY verified successful payments contribute to revenue
   const totalRevenue = (db.prepare("SELECT COALESCE(SUM(final_amount), 0) as s FROM payments WHERE status = 'successful'").get() as { s: number }).s;
   const revenueThisMonth = (db.prepare("SELECT COALESCE(SUM(final_amount), 0) as s FROM payments WHERE status = 'successful' AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')").get() as { s: number }).s;
   const revenuePrevMonth = (db.prepare("SELECT COALESCE(SUM(final_amount), 0) as s FROM payments WHERE status = 'successful' AND strftime('%Y-%m', created_at) = strftime('%Y-%m', date('now', '-1 month'))").get() as { s: number }).s;
 
+  const enrollmentsCount = (db.prepare('SELECT COUNT(*) as c FROM enrollments').get() as { c: number }).c;
+  const successfulPaymentsCount = (db.prepare("SELECT COUNT(*) as c FROM payments WHERE status = 'successful'").get() as { c: number }).c;
+  const pendingPayments = (db.prepare("SELECT COUNT(*) as c FROM payments WHERE status IN ('pending', 'processing')").get() as { c: number }).c;
+  const failedPaymentsCount = (db.prepare("SELECT COUNT(*) as c FROM payments WHERE status = 'failed'").get() as { c: number }).c;
+  const cancelledPaymentsCount = (db.prepare("SELECT COUNT(*) as c FROM payments WHERE status = 'cancelled'").get() as { c: number }).c;
+  const refundedPaymentsCount = (db.prepare("SELECT COUNT(*) as c FROM payments WHERE status = 'refunded'").get() as { c: number }).c;
+  const referralsCount =
+    (db.prepare('SELECT COUNT(*) as c FROM course_referral_links').get() as { c: number }).c +
+    (db.prepare('SELECT COUNT(*) as c FROM referrals').get() as { c: number }).c;
+  const certificatesCount = (db.prepare('SELECT COUNT(*) as c FROM certificates').get() as { c: number }).c;
+  const quizAttemptsCount = (db.prepare('SELECT COUNT(*) as c FROM test_attempts').get() as { c: number }).c;
+  const redemptionRequestsCount = (db.prepare('SELECT COUNT(*) as c FROM redemptions').get() as { c: number }).c;
+
   const todaysEnrollments = (db.prepare("SELECT COUNT(*) as c FROM enrollments WHERE date(enrolled_at) = date('now')").get() as { c: number }).c;
   const liveClassesCount = (db.prepare("SELECT COUNT(*) as c FROM live_classes WHERE status IN ('live', 'upcoming')").get() as { c: number }).c;
-  const pendingPayments = (db.prepare("SELECT COUNT(*) as c FROM payments WHERE status IN ('pending', 'processing')").get() as { c: number }).c;
 
   const coursePerformance = db
     .prepare(`
@@ -69,13 +84,19 @@ router.get('/dashboard', (_req, res) => {
     `)
     .all();
 
-  const revenueByMethod = db
+  const rawMethodRows = db
     .prepare(`
       SELECT method, COUNT(*) as count, COUNT(*) as txns, COALESCE(SUM(final_amount), 0) as total
       FROM payments WHERE status = 'successful'
       GROUP BY method
     `)
-    .all();
+    .all() as Array<{ method: string; count: number; txns: number; total: number }>;
+
+  const methodMap = new Map(rawMethodRows.map((r) => [r.method, r]));
+  const revenueByMethod = ['UPI', 'Card', 'NetBanking', 'Wallet'].map((method) => {
+    const found = methodMap.get(method);
+    return found || { method, count: 0, txns: 0, total: 0 };
+  });
 
   res.json({
     metrics: {
@@ -102,9 +123,18 @@ router.get('/dashboard', (_req, res) => {
       revenuePrevMonth,
       revenueChangePct: calcMonthlyDelta(revenueThisMonth, revenuePrevMonth),
       activeCourses: publishedCourses,
+      enrollmentsCount,
+      successfulPaymentsCount,
+      pendingPayments,
+      failedPaymentsCount,
+      cancelledPaymentsCount,
+      refundedPaymentsCount,
+      referralsCount,
+      certificatesCount,
+      quizAttemptsCount,
+      redemptionRequestsCount,
       todaysEnrollments,
       liveClassesCount,
-      pendingPayments,
     },
     coursePerformance,
     recentPayments,
@@ -219,7 +249,7 @@ const mapRoleToDb = (r?: string): string | null => {
 };
 
 router.get('/users', (req, res) => {
-  const { search = '', role = 'all', status = 'all' } = req.query;
+  const { search = '', role = 'all', status = 'all', include_admins = 'false' } = req.query;
   let sql = `
     SELECT u.id, u.full_name, u.email, u.mobile, u.role, u.referral_code,
            COALESCE(u.credits, 0) as credits, u.is_active, u.created_at,
@@ -230,6 +260,9 @@ router.get('/users', (req, res) => {
     WHERE 1=1
   `;
   const params: Array<string | number> = [];
+  if (role === 'all' && include_admins !== 'true') {
+    sql += " AND u.role != 'admin'";
+  }
   if (search) {
     sql += ' AND (LOWER(u.full_name) LIKE ? OR LOWER(u.email) LIKE ? OR u.mobile LIKE ?)';
     const q = `%${String(search).toLowerCase()}%`;
@@ -1040,6 +1073,7 @@ const normalizePaymentStatus = (raw?: string): string | null => {
   if (low === 'processing') return 'processing';
   if (low === 'success' || low === 'successful') return 'successful';
   if (low === 'failed') return 'failed';
+  if (low === 'cancelled' || low === 'canceled') return 'cancelled';
   if (low === 'refunded') return 'refunded';
   return null;
 };
@@ -1054,6 +1088,8 @@ const toDisplayPaymentStatus = (dbStatus: string): string => {
       return 'Pending';
     case 'failed':
       return 'Failed';
+    case 'cancelled':
+      return 'Cancelled';
     case 'refunded':
       return 'Refunded';
     default:
@@ -1301,9 +1337,12 @@ const normalizeRedemptionStatus = (raw?: string): string | null => {
   if (!raw || raw === 'all') return null;
   const low = raw.toLowerCase();
   if (low === 'pending') return 'Pending';
+  if (low === 'processing') return 'Processing';
   if (low === 'approved') return 'Approved';
+  if (low === 'processed') return 'Processed';
   if (low === 'paid') return 'Paid';
   if (low === 'rejected') return 'Rejected';
+  if (low === 'failed') return 'Failed';
   return null;
 };
 
@@ -1390,6 +1429,12 @@ router.put('/cms', (req, res) => {
   const cms: Record<string, unknown> = {};
   for (const r of rows) cms[r.key] = JSON.parse(r.value_json);
   res.json(cms);
+});
+
+// 14. Safe Demo Cleanup Endpoint (Section 39)
+router.post('/cleanup-demo', (_req, res) => {
+  const result = runSafeDemoCleanup();
+  res.json({ ok: true, ...result });
 });
 
 export default router;

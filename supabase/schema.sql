@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS public.payments (
   course_id BIGINT NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
   amount NUMERIC(10,2) NOT NULL,
   currency TEXT NOT NULL DEFAULT 'INR',
-  payment_status TEXT NOT NULL CHECK (payment_status IN ('Created', 'Pending', 'Processing', 'Success', 'Failed', 'Refunded')) DEFAULT 'Created',
+  payment_status TEXT NOT NULL CHECK (payment_status IN ('Created', 'Pending', 'Processing', 'Success', 'Failed', 'Cancelled', 'Refunded')) DEFAULT 'Created',
   payment_method TEXT NOT NULL CHECK (payment_method IN ('UPI', 'Card', 'NetBanking', 'Wallet', 'Free')),
   gateway_order_id TEXT NOT NULL DEFAULT '',
   gateway_payment_id TEXT NOT NULL DEFAULT '',
@@ -200,7 +200,7 @@ CREATE TABLE IF NOT EXISTS public.redemptions (
   amount NUMERIC(10,2) NOT NULL,
   method TEXT NOT NULL DEFAULT 'UPI',
   account_reference TEXT NOT NULL DEFAULT '',
-  status TEXT NOT NULL CHECK (status IN ('Pending', 'Approved', 'Paid', 'Rejected')) DEFAULT 'Pending',
+  status TEXT NOT NULL CHECK (status IN ('Pending', 'Processing', 'Approved', 'Processed', 'Paid', 'Rejected', 'Failed')) DEFAULT 'Pending',
   notes TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

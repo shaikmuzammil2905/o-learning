@@ -11,6 +11,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { api, formatCurrency } from '../lib/api';
+import { broadcastPlatformUpdate } from '../lib/realtime';
 import { clearStoredReferralCode, getStoredReferralCode } from '../lib/referral';
 
 interface PaymentModalProps {
@@ -60,7 +61,7 @@ export function PaymentModal({
     setError('');
     setProcessing(true);
     try {
-      const checkout = await api<{ payment: { id: number; order_ref: string } }>(
+      const checkout = await api<{ payment: { id: number; order_ref: string }; verification_token?: string }>(
         '/api/student/checkout',
         {
           method: 'POST',
@@ -77,14 +78,17 @@ export function PaymentModal({
           simulate,
           batch_id: batchId || null,
           referral_code: itemType === 'course' ? activeRefCode : null,
+          verification_token: checkout.verification_token,
         }),
       });
 
       if (itemType === 'course' && activeRefCode) {
         clearStoredReferralCode();
       }
+      broadcastPlatformUpdate('payment');
       setReceipt(verified.payment);
     } catch (err) {
+      broadcastPlatformUpdate('payment');
       setError(err instanceof Error ? err.message : 'Payment could not be completed.');
     } finally {
       setProcessing(false);

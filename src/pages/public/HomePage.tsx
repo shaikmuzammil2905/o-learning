@@ -309,6 +309,17 @@ export function HomePage() {
           </Link>
         </div>
 
+        {courses.length === 0 ? (
+          <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-xs">
+            <BookOpen className="w-10 h-10 text-[#0052CC] mx-auto mb-3" />
+            <h3 className="font-display font-bold text-lg text-[#0F172A]">
+              No courses available yet.
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 mt-1.5 max-w-md mx-auto">
+              Create and publish your first course from Admin Course Management to showcase it here.
+            </p>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {courses.slice(0, 8).map((course, idx) => {
             const isBlueIcon = course.icon_color === 'blue';
@@ -365,6 +376,7 @@ export function HomePage() {
             );
           })}
         </div>
+        )}
       </section>
 
       {/* ================= LEARN ANYWHERE, ANYTIME BANNER ================= */}

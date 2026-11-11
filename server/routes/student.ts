@@ -424,18 +424,27 @@ router.post('/checkout', (req, res) => {
   const resInsert = db
     .prepare(`
       INSERT INTO payments (order_ref, student_id, item_type, item_id, item_title, amount, discount_amount, final_amount, method, status, gateway_txn_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', '')
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', '')
     `)
     .run(orderRef, sid, item_type, Number(item_id), itemTitle, amount, discountAmount, finalAmount, method);
 
-  const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(Number(resInsert.lastInsertRowid));
-  res.status(201).json({ payment });
+  const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(Number(resInsert.lastInsertRowid)) as {
+    id: number;
+    order_ref: string;
+    final_amount: number;
+  };
+  const verificationToken = crypto
+    .createHmac('sha256', process.env.JWT_SECRET || 'o-learning-dev-secret')
+    .update(`${payment.id}:${payment.order_ref}:${sid}:${payment.final_amount}`)
+    .digest('hex');
+
+  res.status(201).json({ payment, verification_token: verificationToken });
 });
 
 router.post('/payments/:paymentId/verify', (req, res) => {
   const sid = req.user!.id;
   const paymentId = Number(req.params.paymentId);
-  const { simulate = 'success', batch_id, referral_code } = req.body || {};
+  const { simulate = 'success', batch_id, referral_code, verification_token } = req.body || {};
 
   const payment = db
     .prepare('SELECT * FROM payments WHERE id = ? AND student_id = ?')
@@ -462,6 +471,23 @@ router.post('/payments/:paymentId/verify', (req, res) => {
     return;
   }
 
+  // Guard: failed/cancelled/refunded orders cannot be re-verified as successful
+  if (['failed', 'cancelled', 'refunded'].includes(payment.status)) {
+    res.status(409).json({ error: `This order is already ${payment.status} and cannot be completed.` });
+    return;
+  }
+
+  if (verification_token) {
+    const expected = crypto
+      .createHmac('sha256', process.env.JWT_SECRET || 'o-learning-dev-secret')
+      .update(`${payment.id}:${payment.order_ref}:${sid}:${payment.final_amount}`)
+      .digest('hex');
+    if (String(verification_token) !== expected) {
+      res.status(403).json({ error: 'Invalid payment verification signature.' });
+      return;
+    }
+  }
+
   if (simulate === 'fail') {
     db.prepare("UPDATE payments SET status = 'failed', gateway_txn_id = ? WHERE id = ?").run(
       `FAIL-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
@@ -470,6 +496,32 @@ router.post('/payments/:paymentId/verify', (req, res) => {
     const failed = db.prepare('SELECT * FROM payments WHERE id = ?').get(payment.id);
     res.status(402).json({ error: 'Payment could not be completed. Please try again.', payment: failed });
     return;
+  }
+
+  if (simulate === 'cancel') {
+    db.prepare("UPDATE payments SET status = 'cancelled', gateway_txn_id = ? WHERE id = ?").run(
+      `CXL-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
+      payment.id
+    );
+    const cancelled = db.prepare('SELECT * FROM payments WHERE id = ?').get(payment.id);
+    res.status(402).json({ error: 'Payment was cancelled.', payment: cancelled });
+    return;
+  }
+
+  // Re-verify price integrity against current DB course/subscription record before marking successful
+  if (payment.item_type === 'course') {
+    const liveCourse = db
+      .prepare('SELECT id, is_published, is_free, price, discount_price FROM courses WHERE id = ?')
+      .get(payment.item_id) as { id: number; is_published: number; is_free: number; price: number; discount_price: number | null } | undefined;
+    if (!liveCourse || liveCourse.is_published !== 1) {
+      res.status(409).json({ error: 'Course is no longer published.' });
+      return;
+    }
+    const currentDbPrice = liveCourse.is_free ? 0 : liveCourse.discount_price ?? liveCourse.price;
+    if (Number(payment.final_amount) !== Number(currentDbPrice)) {
+      res.status(409).json({ error: 'Course pricing changed during checkout. Please initiate a fresh checkout.' });
+      return;
+    }
   }
 
   const txnId = `${payment.method.toUpperCase()}-OLR-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;

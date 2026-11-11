@@ -325,6 +325,7 @@ export const AdminCourseModal: React.FC<{
                   onChange={(e) => setForm({ ...form, category_id: e.target.value })}
                   className={inputCls}
                 >
+                  <option value="">Uncategorized</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
