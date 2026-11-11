@@ -46,7 +46,7 @@ const VALUE_DETAILS: Record<
       'Quality mentorship should never be restricted by geography or high coaching fees. We price every program transparently for students across India.',
     points: [
       'Free Career Kickstart track with verified completion certificate',
-      'Subscription bundles starting at ₹1,499 for multi-course access',
+      'Transparent single-course pricing with zero recurring fees',
       'Zero hidden charges, instant enrollment, and transparent refund policies',
     ],
     impact: 'Up to 70% more affordable than traditional metro coaching.',

@@ -14,7 +14,6 @@ import {
   Play,
   Search,
   ShieldCheck,
-  Sparkles,
   UserCheck,
   Users,
   Video,
@@ -27,7 +26,6 @@ import { AnimatedCounter, RevealOnScroll } from '../../components/ui/Animations'
 import { useSite } from '../../context/SiteContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../lib/api';
-import type { SubscriptionPlan } from '../../types';
 
 const STAT_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   BookOpen,
@@ -62,20 +60,20 @@ const WHY_CHOOSE_ITEMS = [
     icon: ShieldCheck,
     badge: 'Starting ₹799 · Free Track Included',
     summary:
-      'We believe world-class career and exam coaching should never be locked behind ₹50,000+ fees. O-LEARNING PLATFORM offers transparent pricing, free skill tracks, and flexible subscription bundles.',
+      'We believe world-class career and exam coaching should never be locked behind ₹50,000+ fees. O-LEARNING PLATFORM offers transparent single-course pricing and free starter tracks.',
     metrics: [
-      { label: 'Plans From', value: '₹1,499' },
+      { label: 'Courses From', value: '₹799' },
       { label: 'Free Starter', value: 'Included' },
       { label: 'Hidden Charges', value: 'Zero' },
     ],
     highlights: [
       'Free Career Development & Professional Skills track with official certificate',
       'Up to 50% scholarship discounts across Spoken English, Aptitude & IT courses',
-      'Save more with 3-Month, 6-Month, and 12-Month All-Access Subscription Plans',
+      'Transparent one-time course fees with lifetime recorded access',
       'UPI, Debit/Credit Card, NetBanking & Wallet support with instant enrollment',
     ],
-    ctaTo: '/plans',
-    ctaLabel: 'Compare Plans',
+    ctaTo: '/courses',
+    ctaLabel: 'Explore Courses',
   },
   {
     label: 'Flexible Learning',
@@ -160,11 +158,10 @@ const WHY_CHOOSE_ITEMS = [
 ];
 
 export function HomePage() {
-  const { cms, courses, plans } = useSite();
+  const { cms, courses } = useSite();
   const { user } = useAuth();
   const [mobileSearch, setMobileSearch] = useState('');
   const [whyPopup, setWhyPopup] = useState<(typeof WHY_CHOOSE_ITEMS)[number] | null>(null);
-  const [planPopup, setPlanPopup] = useState<SubscriptionPlan | null>(null);
   const navigate = useNavigate();
 
   const handleMobileSearch = (e: React.FormEvent) => {
@@ -447,98 +444,7 @@ export function HomePage() {
         </RevealOnScroll>
       </section>
 
-      {/* ================= SUBSCRIPTION PLANS PREVIEW (Popups & Scroll Animation) ================= */}
-      {plans.length > 0 && (
-        <section className="bg-gradient-to-b from-slate-50 to-white py-12 border-t border-slate-200/70">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-9">
-              <span className="px-3 py-1 rounded-full bg-orange-50 text-[#FF7A00] text-xs font-bold">
-                AFFORDABLE LEARNING PLANS
-              </span>
-              <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-[#002B7A] mt-2">
-                Choose Your Learning Subscription
-              </h2>
-              <p className="text-sm text-slate-600 mt-1.5">
-                Flexible plans designed for students, graduates, and working professionals across India.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {plans.map((plan, idx) => (
-                <RevealOnScroll key={plan.id} delay={idx * 90}>
-                  <div
-                    className={`rounded-3xl p-6 flex flex-col h-full transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl ${
-                      plan.is_popular
-                        ? 'bg-gradient-to-b from-[#0038A8] to-[#0052CC] text-white shadow-2xl scale-[1.01] border-2 border-[#FF7A00]'
-                        : 'bg-white border border-slate-200 shadow-sm'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-display font-bold text-lg">{plan.name}</h3>
-                      {plan.badge && (
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                            plan.is_popular
-                              ? 'bg-[#FF7A00] text-white'
-                              : 'bg-blue-50 text-[#0052CC]'
-                          }`}
-                        >
-                          {plan.badge}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-4 flex items-baseline gap-1.5">
-                      <span className="font-display font-extrabold text-3xl">
-                        {formatCurrency(plan.price)}
-                      </span>
-                      <span className={`text-xs ${plan.is_popular ? 'text-blue-100' : 'text-slate-500'}`}>
-                        / {plan.duration_months} Months
-                      </span>
-                    </div>
-                    <ul className="mt-5 space-y-2.5 flex-1">
-                      {plan.features.map((f) => (
-                        <li key={f} className="flex items-start gap-2 text-xs sm:text-sm">
-                          <Check
-                            className={`w-4 h-4 shrink-0 mt-0.5 ${
-                              plan.is_popular ? 'text-[#FF9B3D]' : 'text-emerald-500'
-                            }`}
-                          />
-                          <span>{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-6 flex flex-col gap-2">
-                      <Link
-                        to="/plans"
-                        className={`w-full py-3 rounded-xl text-center text-sm font-bold transition ${
-                          plan.is_popular
-                            ? 'bg-[#FF7A00] hover:bg-[#E66D00] text-white'
-                            : 'bg-[#0052CC] hover:bg-[#003EB3] text-white'
-                        }`}
-                      >
-                        Subscribe Now
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => setPlanPopup(plan)}
-                        className={`w-full py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                          plan.is_popular
-                            ? 'bg-white/10 hover:bg-white/20 text-white'
-                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        Compare & Preview Benefits
-                      </button>
-                    </div>
-                  </div>
-                </RevealOnScroll>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ENRICHED WHY CHOOSE POPUP MODAL (image copy 26.png) */}
+      {/* ENRICHED WHY CHOOSE POPUP MODAL */}
       {whyPopup && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
@@ -607,86 +513,6 @@ export function HomePage() {
                 type="button"
                 onClick={() => setWhyPopup(null)}
                 className="px-4 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 cursor-pointer hover:bg-slate-50"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ENRICHED SUBSCRIPTION PLAN PREVIEW POPUP */}
-      {planPopup && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
-          onClick={() => setPlanPopup(null)}
-        >
-          <div
-            className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 text-[#FF7A00] text-xs font-bold">
-                <Sparkles className="w-3.5 h-3.5" /> {planPopup.badge || 'Plan Details'}
-              </span>
-              <button
-                onClick={() => setPlanPopup(null)}
-                className="p-1.5 rounded-full hover:bg-slate-100 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <h3 className="font-display font-extrabold text-2xl text-[#002B7A]">{planPopup.name}</h3>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="font-display font-extrabold text-3xl text-[#FF7A00]">
-                {formatCurrency(planPopup.price)}
-              </span>
-              <span className="text-sm font-semibold text-slate-500">
-                / {planPopup.duration_months} Months ({formatCurrency(Math.round(planPopup.price / planPopup.duration_months))}/mo)
-              </span>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2.5 my-4 p-3.5 rounded-2xl bg-blue-50/60 border border-blue-100 text-center text-xs">
-              <div>
-                <p className="text-slate-500">Validity</p>
-                <p className="font-bold text-[#00338D]">{planPopup.duration_months} Months</p>
-              </div>
-              <div>
-                <p className="text-slate-500">Certificate</p>
-                <p className="font-bold text-emerald-600">Included</p>
-              </div>
-              <div>
-                <p className="text-slate-500">Activation</p>
-                <p className="font-bold text-[#FF7A00]">Instant</p>
-              </div>
-            </div>
-
-            <div className="space-y-2.5 border-t border-slate-100 pt-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Everything Included</p>
-              {planPopup.features.map((f) => (
-                <div key={f} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-700">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                  <span>{f}</span>
-                </div>
-              ))}
-              <div className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-700">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Full access on desktop web & mobile app with live progress sync</span>
-              </div>
-            </div>
-
-            <div className="mt-6 flex gap-2.5">
-              <Link
-                to="/plans"
-                onClick={() => setPlanPopup(null)}
-                className="flex-1 py-3 rounded-xl bg-[#FF7A00] hover:bg-[#E66D00] text-white text-center text-sm font-bold shadow-md"
-              >
-                Proceed to Subscribe →
-              </Link>
-              <button
-                type="button"
-                onClick={() => setPlanPopup(null)}
-                className="px-4 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 cursor-pointer"
               >
                 Close
               </button>

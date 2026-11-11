@@ -170,14 +170,6 @@ export function DashboardLayout({
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
-            {isStudent && (
-              <Link
-                to="/plans"
-                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-orange-50 text-[#FF7A00] border border-orange-200 text-xs font-bold hover:bg-orange-100 transition"
-              >
-                <Sparkles className="w-3.5 h-3.5" /> Upgrade Plan
-              </Link>
-            )}
             <div className="flex items-center gap-2.5 bg-slate-100 px-3 py-1.5 rounded-full">
               <div className="w-7 h-7 rounded-full bg-[#0052CC] text-white text-xs font-bold flex items-center justify-center">
                 {user?.full_name?.charAt(0).toUpperCase() || 'U'}
@@ -236,7 +228,7 @@ export const STUDENT_LINKS: SidebarLink[] = [
   { to: '/student/live', label: 'Live Classes', icon: Radio },
   { to: '/student/tests', label: 'Tests & Results', icon: ClipboardCheck },
   { to: '/student/certificates', label: 'Certificates', icon: Award },
-  { to: '/student/payments', label: 'Payments & Plans', icon: CreditCard },
+  { to: '/student/payments', label: 'Payments', icon: CreditCard },
   { to: '/student/referrals', label: 'Refer & Earn', icon: Gift },
   { to: '/student/profile', label: 'Profile & Settings', icon: UserIcon },
 ];

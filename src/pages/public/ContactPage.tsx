@@ -178,7 +178,7 @@ export function ContactPage() {
                 >
                   <option>Course Enquiry</option>
                   <option>Batch Timings</option>
-                  <option>Subscription Plans</option>
+                  <option>Referral &amp; Rewards</option>
                   <option>Technical Support</option>
                 </select>
               </div>

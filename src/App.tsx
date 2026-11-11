@@ -13,7 +13,6 @@ import { TestsPage } from './pages/public/TestsPage';
 import { BatchesPage } from './pages/public/BatchesPage';
 import { AboutPage } from './pages/public/AboutPage';
 import { ContactPage } from './pages/public/ContactPage';
-import { PlansPage } from './pages/public/PlansPage';
 import { VerifyCertPage } from './pages/public/VerifyCertPage';
 import { LoginPage } from './pages/public/LoginPage';
 import { RegisterPage } from './pages/public/RegisterPage';
@@ -102,7 +101,7 @@ export default function App() {
             <Route path="/batches" element={<BatchesPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/contact" element={<ContactPage />} />
-            <Route path="/plans" element={<PlansPage />} />
+            <Route path="/plans" element={<Navigate to="/courses" replace />} />
             <Route path="/verify-certificate" element={<VerifyCertPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />

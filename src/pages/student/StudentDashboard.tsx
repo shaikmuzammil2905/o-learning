@@ -75,27 +75,6 @@ export function StudentDashboard() {
         <ErrorState message={error} onRetry={load} />
       ) : (
         <div className="space-y-6">
-          {/* Active Subscription Banner */}
-          {data.activeSubscription && (
-            <div className="rounded-2xl bg-gradient-to-r from-[#0038A8] to-[#0052CC] text-white p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 shadow-md">
-              <div className="flex items-center gap-3">
-                <Sparkles className="w-6 h-6 text-[#FF9B3D]" />
-                <div>
-                  <p className="font-bold text-sm">{data.activeSubscription.plan_name} Active</p>
-                  <p className="text-xs text-blue-100">
-                    Valid until {new Date(data.activeSubscription.expires_at).toLocaleDateString('en-IN')}
-                  </p>
-                </div>
-              </div>
-              <Link
-                to="/courses"
-                className="px-4 py-2 rounded-xl bg-[#FF7A00] text-white text-xs font-bold"
-              >
-                Explore Courses
-              </Link>
-            </div>
-          )}
-
           {/* 4 Summary Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[

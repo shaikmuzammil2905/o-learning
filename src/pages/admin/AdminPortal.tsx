@@ -34,7 +34,7 @@ const ADMIN_LINKS: SidebarLink[] = [
   { to: '/admin/faculty', label: 'Faculty', icon: UserCheck },
   { to: '/admin/batches', label: 'Batches & Live', icon: Calendar },
   { to: '/admin/tests', label: 'Tests & Questions', icon: ClipboardCheck },
-  { to: '/admin/payments', label: 'Payments & Plans', icon: CreditCard },
+  { to: '/admin/payments', label: 'Payments', icon: CreditCard },
   { to: '/admin/referrals', label: 'Referral Management', icon: Gift },
   { to: '/admin/certificates', label: 'Certificates', icon: Award },
   { to: '/admin/cms', label: 'Website CMS & Inbox', icon: Globe },
@@ -257,7 +257,6 @@ export function AdminPortal({ section = 'overview' }: { section?: string }) {
                   { label: 'Active Courses', value: dash.metrics.activeCourses, icon: BookOpen },
                   { label: 'Total Revenue', value: formatCurrency(dash.metrics.totalRevenue), icon: IndianRupee },
                   { label: "Today's Enrollments", value: dash.metrics.todaysEnrollments, icon: BarChart3 },
-                  { label: 'Active Subscriptions', value: dash.metrics.activeSubscriptions, icon: Sparkles },
                   { label: 'Live Classes', value: dash.metrics.liveClassesCount, icon: Radio },
                   { label: 'Pending Payments', value: dash.metrics.pendingPayments, icon: CreditCard },
                 ].map((m) => {
@@ -983,91 +982,9 @@ export function AdminPortal({ section = 'overview' }: { section?: string }) {
             </div>
           )}
 
-          {/* ==================== 7. PAYMENTS & SUBSCRIPTION PLANS ==================== */}
+          {/* ==================== 7. PAYMENTS ==================== */}
           {section === 'payments' && (
             <div className="space-y-6">
-              {/* Subscription Plans Management */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    await api('/api/admin/plans', {
-                      method: 'POST',
-                      body: JSON.stringify({
-                        name: newPlan.name,
-                        price: Number(newPlan.price),
-                        duration_months: Number(newPlan.duration_months),
-                        badge: newPlan.badge,
-                        features: newPlan.featuresText.split(',').map((s) => s.trim()).filter(Boolean),
-                      }),
-                    });
-                    setNewPlan({ ...newPlan, name: '' });
-                    await refreshSite();
-                    notify('Subscription plan added & live!');
-                    loadSection();
-                  }}
-                  className="lg:col-span-4 bg-white rounded-2xl p-6 border border-slate-200 space-y-3 h-fit"
-                >
-                  <h2 className="font-display font-bold text-base text-[#002B7A]">Add Subscription Plan</h2>
-                  <input required placeholder="Plan Name" value={newPlan.name} onChange={(e) => setNewPlan({ ...newPlan, name: e.target.value })} className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input type="number" required placeholder="Price ₹" value={newPlan.price} onChange={(e) => setNewPlan({ ...newPlan, price: e.target.value })} className="px-3 py-2 rounded-xl border border-slate-300 text-xs" />
-                    <input type="number" required placeholder="Months" value={newPlan.duration_months} onChange={(e) => setNewPlan({ ...newPlan, duration_months: e.target.value })} className="px-3 py-2 rounded-xl border border-slate-300 text-xs" />
-                  </div>
-                  <textarea rows={2} placeholder="Features (comma separated)" value={newPlan.featuresText} onChange={(e) => setNewPlan({ ...newPlan, featuresText: e.target.value })} className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs" />
-                  <button type="submit" className="w-full py-2.5 rounded-xl bg-[#0052CC] text-white text-xs font-bold cursor-pointer">Save Plan</button>
-                </form>
-
-                <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {plans.map((p) => (
-                    <div key={p.id} className="bg-white rounded-2xl p-5 border border-slate-200 space-y-3">
-                      <div className="flex justify-between items-center">
-                        <h3 className="font-bold text-slate-900">{p.name}</h3>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${p.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                          {p.is_active ? 'Active' : 'Paused'}
-                        </span>
-                      </div>
-                      <p className="font-display font-extrabold text-2xl text-[#0052CC]">
-                        {formatCurrency(p.price)} <span className="text-xs font-normal text-slate-500">/ {p.duration_months}m</span>
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const nextPrice = window.prompt('Enter new price (₹):', String(p.price));
-                            if (!nextPrice) return;
-                            await api(`/api/admin/plans/${p.id}`, {
-                              method: 'PUT',
-                              body: JSON.stringify({ price: Number(nextPrice) }),
-                            });
-                            await refreshSite();
-                            notify('Plan price updated!');
-                            loadSection();
-                          }}
-                          className="flex-1 py-1.5 rounded-lg bg-blue-50 text-[#0052CC] text-xs font-bold cursor-pointer"
-                        >
-                          Edit Price
-                        </button>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            await api(`/api/admin/plans/${p.id}`, {
-                              method: 'PUT',
-                              body: JSON.stringify({ is_active: !p.is_active }),
-                            });
-                            await refreshSite();
-                            loadSection();
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-slate-100 text-xs font-bold cursor-pointer"
-                        >
-                          {p.is_active ? 'Pause' : 'Enable'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
               {/* Payments Table */}
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                 <div className="p-5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">

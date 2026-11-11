@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { CreditCard, Sparkles } from 'lucide-react';
+import { CreditCard } from 'lucide-react';
 import { DashboardLayout, STUDENT_LINKS } from '../../components/DashboardLayout';
 import { EmptyState, LoadingState } from '../../components/ui/StateViews';
 import { api, formatCurrency, formatDateTime } from '../../lib/api';
@@ -21,60 +20,30 @@ interface PaymentRow {
 
 export function PaymentsPage() {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
-  const [activeSub, setActiveSub] = useState<{ plan_name: string; expires_at: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api<{ payments: PaymentRow[]; activeSubscription: { plan_name: string; expires_at: string } | null }>(
-      '/api/student/payments'
-    )
+    api<{ payments: PaymentRow[] }>('/api/student/payments')
       .then((res) => {
         setPayments(res.payments);
-        setActiveSub(res.activeSubscription);
       })
       .finally(() => setLoading(false));
   }, []);
 
   return (
     <DashboardLayout
-      title="Payments & Subscription"
-      subtitle="View your payment history, order receipts, and active subscription plan"
+      title="Payments"
+      subtitle="View your course enrollment payment history and order receipts"
       links={STUDENT_LINKS}
     >
       {loading ? (
         <LoadingState message="Loading payment records…" />
       ) : (
         <div className="space-y-6">
-          {/* Subscription Status Card */}
-          <div className="bg-gradient-to-r from-[#00338D] to-[#0052CC] text-white rounded-3xl p-6 flex flex-wrap items-center justify-between gap-4 shadow-md">
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center">
-                <Sparkles className="w-6 h-6 text-[#FF9B3D]" />
-              </div>
-              <div>
-                <p className="text-xs text-blue-100 uppercase font-bold">Subscription Status</p>
-                <h2 className="font-display font-bold text-xl">
-                  {activeSub ? activeSub.plan_name : 'No Active Subscription Plan'}
-                </h2>
-                <p className="text-xs text-blue-100 mt-0.5">
-                  {activeSub
-                    ? `Active until ${new Date(activeSub.expires_at).toLocaleDateString('en-IN')}`
-                    : 'Upgrade to Pro or Premium to unlock live batches and full mock tests.'}
-                </p>
-              </div>
-            </div>
-            <Link
-              to="/plans"
-              className="px-5 py-2.5 rounded-xl bg-[#FF7A00] hover:bg-[#E66D00] text-white text-xs font-bold shadow"
-            >
-              {activeSub ? 'Change Plan' : 'View Subscription Plans'}
-            </Link>
-          </div>
-
           {payments.length === 0 ? (
             <EmptyState
               title="No payment records yet"
-              description="Your course enrollments and subscription payments will appear here."
+              description="Your course enrollment payments and receipts will appear here."
               icon={<CreditCard className="w-7 h-7" />}
             />
           ) : (

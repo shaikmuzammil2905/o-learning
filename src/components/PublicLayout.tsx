@@ -4,6 +4,7 @@ import {
   BookOpen,
   ChevronRight,
   ClipboardCheck,
+  Gift,
   GraduationCap,
   Home,
   LayoutDashboard,
@@ -13,15 +14,20 @@ import {
   Menu,
   MessageCircle,
   Phone,
+  Share2,
   User as UserIcon,
   X,
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
+import { CourseShareModal } from './CourseShareModal';
 import { useAuth } from '../context/AuthContext';
 import { useSite } from '../context/SiteContext';
+import type { Course } from '../types';
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [referOpen, setReferOpen] = useState(false);
+  const [shareCourse, setShareCourse] = useState<Course | null>(null);
   const { user, logout } = useAuth();
   const { cms, courses } = useSite();
   const navigate = useNavigate();
@@ -156,13 +162,6 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               </NavLink>
             ))}
             <NavLink
-              to="/plans"
-              onClick={() => setMenuOpen(false)}
-              className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Subscription Plans
-            </NavLink>
-            <NavLink
               to="/verify-certificate"
               onClick={() => setMenuOpen(false)}
               className="block px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50"
@@ -256,7 +255,8 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 {[
                   { to: '/', label: 'Home' },
                   { to: '/courses', label: 'Courses' },
-                  { to: '/plans', label: 'Subscription Plans' },
+                  { to: '/tests', label: 'Practice Tests' },
+                  { to: '/batches', label: 'Live Batches' },
                   { to: '/about', label: 'About Us' },
                   { to: '/verify-certificate', label: 'Verify Certificate' },
                   { to: '/contact', label: 'Contact Us' },
@@ -348,17 +348,96 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
 
-      {/* Floating WhatsApp Button (official number 9121403515) */}
-      <a
-        href={whatsappUrl}
-        target="_blank"
-        rel="noreferrer"
-        aria-label="Chat on WhatsApp"
-        className="fixed bottom-[74px] md:bottom-6 right-3 md:right-5 z-40 w-11 h-11 md:w-13 md:h-13 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
+      {/* Floating Refer & Earn Button (replaces floating WhatsApp popup) */}
+      <button
+        type="button"
+        onClick={() => setReferOpen(true)}
+        aria-label="Refer & Share Courses"
+        className="fixed bottom-[74px] md:bottom-6 right-3 md:right-5 z-40 inline-flex items-center gap-2 px-4 py-3 rounded-full bg-gradient-to-r from-[#FF7A00] to-[#FF5500] hover:from-[#FF8C1A] hover:to-[#FF6B00] text-white font-display font-bold text-xs sm:text-sm shadow-xl shadow-orange-600/35 hover:scale-105 transition-transform cursor-pointer"
       >
-        <span className="absolute inset-0 rounded-full bg-[#25D366] animate-pulse-ring" />
-        <MessageCircle className="w-6 h-6 md:w-7 md:h-7 relative z-10 fill-white" />
-      </a>
+        <span className="absolute inset-0 rounded-full bg-[#FF7A00] animate-pulse-ring pointer-events-none" />
+        <Gift className="w-4 h-4 sm:w-5 sm:h-5 relative z-10" />
+        <span className="relative z-10">Refer</span>
+      </button>
+
+      {/* Quick Refer & Share Course Selector Popup */}
+      {referOpen && (
+        <div
+          className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs sm:p-4"
+          onClick={() => setReferOpen(false)}
+        >
+          <div
+            className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-[#00338D] to-[#0052CC] text-white px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Gift className="w-5 h-5 text-[#FF9B3D]" />
+                <div>
+                  <h3 className="font-display font-bold text-base">Refer &amp; Share Courses</h3>
+                  <p className="text-[11px] text-blue-100">
+                    Pick any course to generate your unique referral link
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReferOpen(false)}
+                aria-label="Close refer popup"
+                className="p-1.5 rounded-full hover:bg-white/15 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-2.5 overflow-y-auto pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+              {courses.slice(0, 8).map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    setReferOpen(false);
+                    setShareCourse(c);
+                  }}
+                  className="w-full p-2.5 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200/80 flex items-center justify-between gap-3 text-left transition cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img
+                      src={c.thumbnail_url}
+                      alt={c.title}
+                      className="w-16 aspect-[16/9] rounded-xl object-cover shrink-0 bg-blue-50"
+                    />
+                    <span className="font-bold text-xs sm:text-sm text-slate-900 truncate">
+                      {c.title}
+                    </span>
+                  </div>
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#0052CC] text-white text-xs font-bold shrink-0">
+                    <Share2 className="w-3.5 h-3.5" /> Refer
+                  </span>
+                </button>
+              ))}
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                <Link
+                  to={user ? '/student/referrals' : '/register'}
+                  onClick={() => setReferOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-[#FF7A00] text-white text-center text-xs font-bold"
+                >
+                  {user ? 'Open My Referral Dashboard →' : 'Register & Earn Rewards →'}
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {shareCourse && (
+        <CourseShareModal
+          course={shareCourse}
+          open={Boolean(shareCourse)}
+          onClose={() => setShareCourse(null)}
+        />
+      )}
 
       {/* Mobile App Bottom Navigation (Home, My Learning, Courses, Tests, Profile) */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-1 py-1.5 flex items-center justify-around shadow-[0_-4px_20px_rgba(15,23,42,0.06)]">
