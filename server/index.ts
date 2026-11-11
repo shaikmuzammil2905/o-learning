@@ -65,7 +65,13 @@ app.get('/sitemap.xml', (req, res) => {
   res.send(xml);
 });
 
-// Serve static assets & built Vite frontend
+// Serve uploaded assets & static assets & built Vite frontend
+const uploadDir = process.env.VERCEL
+  ? path.join('/tmp', 'olearning-uploads')
+  : path.resolve(process.cwd(), 'public', 'uploads');
+fs.mkdirSync(uploadDir, { recursive: true });
+app.use('/uploads', express.static(uploadDir, { maxAge: '7d' }));
+
 const publicDir = path.resolve(process.cwd(), 'public');
 if (fs.existsSync(publicDir)) {
   app.use(express.static(publicDir, { maxAge: '1d' }));

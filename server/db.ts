@@ -30,6 +30,7 @@ export function initDatabase(): void {
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK (role IN ('student', 'faculty', 'admin')) DEFAULT 'student',
       avatar_url TEXT,
+      credits REAL NOT NULL DEFAULT 0,
       referral_code TEXT NOT NULL UNIQUE,
       referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       is_active INTEGER NOT NULL DEFAULT 1,
@@ -51,6 +52,7 @@ export function initDatabase(): void {
       name TEXT NOT NULL UNIQUE,
       slug TEXT NOT NULL UNIQUE,
       description TEXT NOT NULL DEFAULT '',
+      image TEXT NOT NULL DEFAULT '',
       icon_name TEXT NOT NULL DEFAULT 'BookOpen',
       is_active INTEGER NOT NULL DEFAULT 1
     );
@@ -63,13 +65,19 @@ export function initDatabase(): void {
       short_description TEXT NOT NULL,
       description TEXT NOT NULL,
       thumbnail_url TEXT NOT NULL,
+      banner_image TEXT NOT NULL DEFAULT '',
+      preview_image TEXT NOT NULL DEFAULT '',
+      instructor_image TEXT NOT NULL DEFAULT '',
       icon_name TEXT NOT NULL DEFAULT 'BookOpen',
       icon_color TEXT NOT NULL DEFAULT 'orange',
       level TEXT NOT NULL DEFAULT 'Beginner to Advanced',
       duration TEXT NOT NULL DEFAULT '12 Weeks',
+      language TEXT NOT NULL DEFAULT 'English / Hindi',
+      prerequisites TEXT NOT NULL DEFAULT 'None',
       price INTEGER NOT NULL DEFAULT 1999,
       discount_price INTEGER,
       is_free INTEGER NOT NULL DEFAULT 0,
+      featured INTEGER NOT NULL DEFAULT 0,
       faculty_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       what_you_learn_json TEXT NOT NULL DEFAULT '[]',
       faqs_json TEXT NOT NULL DEFAULT '[]',
@@ -152,6 +160,9 @@ export function initDatabase(): void {
       pass_marks INTEGER NOT NULL DEFAULT 8,
       negative_marks REAL NOT NULL DEFAULT 0,
       difficulty TEXT NOT NULL CHECK (difficulty IN ('Easy', 'Medium', 'Hard')) DEFAULT 'Medium',
+      price INTEGER NOT NULL DEFAULT 0,
+      certificate_enabled INTEGER NOT NULL DEFAULT 1,
+      expiry_date TEXT DEFAULT '',
       is_published INTEGER NOT NULL DEFAULT 1,
       created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -324,7 +335,40 @@ export function initDatabase(): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(course_id, referred_user_id)
     );
+
+    CREATE TABLE IF NOT EXISTS redemptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      referral_id INTEGER REFERENCES course_referral_links(id) ON DELETE SET NULL,
+      amount REAL NOT NULL,
+      method TEXT NOT NULL DEFAULT 'UPI',
+      account_reference TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL CHECK (status IN ('Pending', 'Approved', 'Paid', 'Rejected')) DEFAULT 'Pending',
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
+
+  // Ensure new columns exist if DB was created before this migration
+  const safeAddCol = (table: string, colDef: string) => {
+    try {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${colDef};`);
+    } catch {
+      // column already exists
+    }
+  };
+  safeAddCol('users', 'credits REAL NOT NULL DEFAULT 0');
+  safeAddCol('categories', "image TEXT NOT NULL DEFAULT ''");
+  safeAddCol('courses', "banner_image TEXT NOT NULL DEFAULT ''");
+  safeAddCol('courses', "preview_image TEXT NOT NULL DEFAULT ''");
+  safeAddCol('courses', "instructor_image TEXT NOT NULL DEFAULT ''");
+  safeAddCol('courses', "language TEXT NOT NULL DEFAULT 'English / Hindi'");
+  safeAddCol('courses', "prerequisites TEXT NOT NULL DEFAULT 'None'");
+  safeAddCol('courses', 'featured INTEGER NOT NULL DEFAULT 0');
+  safeAddCol('tests', 'price INTEGER NOT NULL DEFAULT 0');
+  safeAddCol('tests', 'certificate_enabled INTEGER NOT NULL DEFAULT 1');
+  safeAddCol('tests', "expiry_date TEXT DEFAULT ''");
 
   const userCount = (db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c;
   if (userCount === 0) {
@@ -1351,9 +1395,18 @@ function seedDatabase(): void {
       address: 'Hitech City / Madhapur EdTech Hub, Hyderabad, Telangana 500081, India',
     },
     referral: {
+      enabled: true,
+      rewardType: 'fixed',
       rewardAmount: 250,
       discountPercent: 10,
+      minPurchase: 0,
+      maxReward: 2500,
       headline: 'Invite Friends & Earn Rewards!',
+      shareMessage: 'Check out this course on O-Learning Platform!',
+    },
+    payment: {
+      currency: 'INR',
+      gatewayMode: 'Standard Checkout',
     },
   };
 

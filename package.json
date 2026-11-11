@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
     "compression": "^1.8.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -43,4 +44,3 @@
     "vite": "^6.1.1"
   }
 }
-

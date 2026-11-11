@@ -95,9 +95,26 @@ export default function App() {
             {/* Public Website */}
             <Route path="/" element={<HomePage />} />
             <Route path="/courses" element={<CoursesPage />} />
+            <Route path="/categories/:slug" element={<CoursesPage />} />
             <Route path="/courses/:courseId" element={<CourseDetailPage />} />
             <Route path="/course/:courseId" element={<CourseDetailPage />} />
             <Route path="/tests" element={<TestsPage />} />
+            <Route
+              path="/quiz/:id"
+              element={
+                <RequireRole roles={['student', 'admin']}>
+                  <StudentTestsPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/my-learning"
+              element={
+                <RequireRole roles={['student', 'admin']}>
+                  <MyCoursesPage />
+                </RequireRole>
+              }
+            />
             <Route path="/batches" element={<BatchesPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/contact" element={<ContactPage />} />
@@ -240,10 +257,34 @@ export default function App() {
               }
             />
             <Route
+              path="/admin/quizzes"
+              element={
+                <RequireRole roles={['admin']}>
+                  <AdminPortal section="quizzes" />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/categories"
+              element={
+                <RequireRole roles={['admin']}>
+                  <AdminPortal section="categories" />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/users"
+              element={
+                <RequireRole roles={['admin']}>
+                  <AdminPortal section="users" />
+                </RequireRole>
+              }
+            />
+            <Route
               path="/admin/students"
               element={
                 <RequireRole roles={['admin']}>
-                  <AdminPortal section="students" />
+                  <AdminPortal section="users" />
                 </RequireRole>
               }
             />
@@ -267,7 +308,7 @@ export default function App() {
               path="/admin/tests"
               element={
                 <RequireRole roles={['admin']}>
-                  <AdminPortal section="tests" />
+                  <AdminPortal section="quizzes" />
                 </RequireRole>
               }
             />
@@ -296,10 +337,26 @@ export default function App() {
               }
             />
             <Route
+              path="/admin/redemptions"
+              element={
+                <RequireRole roles={['admin']}>
+                  <AdminPortal section="redemptions" />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/settings"
+              element={
+                <RequireRole roles={['admin']}>
+                  <AdminPortal section="settings" />
+                </RequireRole>
+              }
+            />
+            <Route
               path="/admin/cms"
               element={
                 <RequireRole roles={['admin']}>
-                  <AdminPortal section="cms" />
+                  <AdminPortal section="settings" />
                 </RequireRole>
               }
             />

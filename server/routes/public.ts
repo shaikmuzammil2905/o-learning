@@ -19,7 +19,13 @@ router.get('/cms', (_req, res) => {
 
 router.get('/categories', (_req, res) => {
   const categories = db
-    .prepare('SELECT * FROM categories WHERE is_active = 1 ORDER BY id ASC')
+    .prepare(`
+      SELECT cat.*,
+             (SELECT COUNT(*) FROM courses c WHERE c.category_id = cat.id AND c.is_published = 1) as courses_count
+      FROM categories cat
+      WHERE cat.is_active = 1
+      ORDER BY cat.id ASC
+    `)
     .all();
   res.json(categories);
 });

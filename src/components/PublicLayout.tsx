@@ -348,17 +348,29 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
 
-      {/* Floating Refer & Earn Button (replaces floating WhatsApp popup) */}
-      <button
-        type="button"
-        onClick={() => setReferOpen(true)}
-        aria-label="Refer & Share Courses"
-        className="fixed bottom-[74px] md:bottom-6 right-3 md:right-5 z-40 inline-flex items-center gap-2 px-4 py-3 rounded-full bg-gradient-to-r from-[#FF7A00] to-[#FF5500] hover:from-[#FF8C1A] hover:to-[#FF6B00] text-white font-display font-bold text-xs sm:text-sm shadow-xl shadow-orange-600/35 hover:scale-105 transition-transform cursor-pointer"
-      >
-        <span className="absolute inset-0 rounded-full bg-[#FF7A00] animate-pulse-ring pointer-events-none" />
-        <Gift className="w-4 h-4 sm:w-5 sm:h-5 relative z-10" />
-        <span className="relative z-10">Refer</span>
-      </button>
+      {/* Floating Action Cluster: positioned bottom-left above mobile nav so right-side card CTAs & Share buttons stay unobstructed */}
+      <div className="fixed bottom-[74px] left-3 md:bottom-6 md:left-auto md:right-5 z-40 flex items-center gap-2">
+        <a
+          href={`https://wa.me/${(cms.contact.whatsapp || cms.contact.phone || '919876543210').replace(/\D/g, '')}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="WhatsApp Support"
+          title="Chat on WhatsApp"
+          className="inline-flex items-center justify-center w-10 h-10 md:w-11 md:h-11 rounded-full bg-[#25D366] hover:bg-[#1EBE5D] text-white shadow-lg shadow-emerald-600/30 hover:scale-105 transition-transform"
+        >
+          <MessageCircle className="w-5 h-5" />
+        </a>
+        <button
+          type="button"
+          onClick={() => setReferOpen(true)}
+          aria-label="Refer & Share Courses"
+          className="relative inline-flex items-center gap-1.5 px-3.5 py-2.5 md:px-4 md:py-3 rounded-full bg-gradient-to-r from-[#FF7A00] to-[#FF5500] hover:from-[#FF8C1A] hover:to-[#FF6B00] text-white font-display font-bold text-xs sm:text-sm shadow-xl shadow-orange-600/35 hover:scale-105 transition-transform cursor-pointer"
+        >
+          <span className="absolute inset-0 rounded-full bg-[#FF7A00] animate-pulse-ring pointer-events-none" />
+          <Gift className="w-4 h-4 relative z-10" />
+          <span className="relative z-10">Refer</span>
+        </button>
+      </div>
 
       {/* Quick Refer & Share Course Selector Popup */}
       {referOpen && (

@@ -1,26 +1,47 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import db from '../db.js';
 import { hashPassword, requireAuth, requireRole } from '../auth.js';
 
 const router = Router();
 router.use(requireAuth, requireRole('admin'));
 
-// 1. Analytics & Dashboard Overview
+function calcMonthlyDelta(thisMonth: number, prevMonth: number): number {
+  if (prevMonth === 0) return thisMonth > 0 ? 100 : 0;
+  return Math.round(((thisMonth - prevMonth) / prevMonth) * 100);
+}
+
+// 1. Analytics & Dashboard Overview (100% live DB metrics & monthly comparison)
 router.get('/dashboard', (_req, res) => {
+  const totalCourses = (db.prepare('SELECT COUNT(*) as c FROM courses').get() as { c: number }).c;
+  const totalCoursesThisMonth = (db.prepare("SELECT COUNT(*) as c FROM courses WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')").get() as { c: number }).c;
+  const totalCoursesPrevMonth = (db.prepare("SELECT COUNT(*) as c FROM courses WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', date('now', '-1 month'))").get() as { c: number }).c;
+
+  const publishedCourses = (db.prepare('SELECT COUNT(*) as c FROM courses WHERE is_published = 1').get() as { c: number }).c;
+  const publishedThisMonth = (db.prepare("SELECT COUNT(*) as c FROM courses WHERE is_published = 1 AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')").get() as { c: number }).c;
+  const publishedPrevMonth = (db.prepare("SELECT COUNT(*) as c FROM courses WHERE is_published = 1 AND strftime('%Y-%m', created_at) = strftime('%Y-%m', date('now', '-1 month'))").get() as { c: number }).c;
+
+  const totalUsers = (db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c;
   const totalStudents = (db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'student'").get() as { c: number }).c;
-  const activeCourses = (db.prepare('SELECT COUNT(*) as c FROM courses WHERE is_published = 1').get() as { c: number }).c;
+  const usersThisMonth = (db.prepare("SELECT COUNT(*) as c FROM users WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')").get() as { c: number }).c;
+  const usersPrevMonth = (db.prepare("SELECT COUNT(*) as c FROM users WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', date('now', '-1 month'))").get() as { c: number }).c;
+
   const totalRevenue = (db.prepare("SELECT COALESCE(SUM(final_amount), 0) as s FROM payments WHERE status = 'successful'").get() as { s: number }).s;
+  const revenueThisMonth = (db.prepare("SELECT COALESCE(SUM(final_amount), 0) as s FROM payments WHERE status = 'successful' AND strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')").get() as { s: number }).s;
+  const revenuePrevMonth = (db.prepare("SELECT COALESCE(SUM(final_amount), 0) as s FROM payments WHERE status = 'successful' AND strftime('%Y-%m', created_at) = strftime('%Y-%m', date('now', '-1 month'))").get() as { s: number }).s;
+
   const todaysEnrollments = (db.prepare("SELECT COUNT(*) as c FROM enrollments WHERE date(enrolled_at) = date('now')").get() as { c: number }).c;
-  const activeSubscriptions = (db.prepare("SELECT COUNT(*) as c FROM user_subscriptions WHERE status = 'active' AND datetime(expires_at) > datetime('now')").get() as { c: number }).c;
   const liveClassesCount = (db.prepare("SELECT COUNT(*) as c FROM live_classes WHERE status IN ('live', 'upcoming')").get() as { c: number }).c;
   const pendingPayments = (db.prepare("SELECT COUNT(*) as c FROM payments WHERE status IN ('pending', 'processing')").get() as { c: number }).c;
 
   const coursePerformance = db
     .prepare(`
-      SELECT c.id, c.title,
+      SELECT c.id, c.title, c.is_published,
              (SELECT COUNT(*) FROM enrollments e WHERE e.course_id = c.id) as enrollments,
-             (SELECT COALESCE(ROUND(AVG(e.progress_percent), 0), 0) FROM enrollments e WHERE e.course_id = c.id) as avg_progress
+             (SELECT COALESCE(ROUND(AVG(e.progress_percent), 0), 0) FROM enrollments e WHERE e.course_id = c.id) as avg_progress,
+             (SELECT COALESCE(SUM(p.final_amount), 0) FROM payments p WHERE p.item_type = 'course' AND p.item_id = c.id AND p.status = 'successful') as revenue
       FROM courses c
       ORDER BY enrollments DESC, c.id ASC
       LIMIT 8
@@ -29,7 +50,7 @@ router.get('/dashboard', (_req, res) => {
 
   const recentPayments = db
     .prepare(`
-      SELECT p.*, u.full_name as student_name
+      SELECT p.*, u.full_name as student_name, u.email as student_email
       FROM payments p
       JOIN users u ON u.id = p.student_id
       ORDER BY p.created_at DESC
@@ -48,10 +69,9 @@ router.get('/dashboard', (_req, res) => {
     `)
     .all();
 
-  // Monthly revenue & enrollment trend (last 6 months + current)
   const revenueByMethod = db
     .prepare(`
-      SELECT method, COUNT(*) as count, COALESCE(SUM(final_amount), 0) as total
+      SELECT method, COUNT(*) as count, COUNT(*) as txns, COALESCE(SUM(final_amount), 0) as total
       FROM payments WHERE status = 'successful'
       GROUP BY method
     `)
@@ -59,11 +79,30 @@ router.get('/dashboard', (_req, res) => {
 
   res.json({
     metrics: {
+      totalCourses,
+      coursesCount: totalCourses,
+      coursesThisMonth: totalCoursesThisMonth,
+      totalCoursesThisMonth,
+      totalCoursesPrevMonth,
+      totalCoursesChangePct: calcMonthlyDelta(totalCoursesThisMonth, totalCoursesPrevMonth),
+      publishedCourses,
+      publishedCoursesCount: publishedCourses,
+      publishedThisMonth,
+      publishedPrevMonth,
+      publishedChangePct: calcMonthlyDelta(publishedThisMonth, publishedPrevMonth),
+      totalUsers,
+      totalUsersCount: totalUsers,
       totalStudents,
-      activeCourses,
+      studentsCount: totalStudents,
+      usersThisMonth,
+      usersPrevMonth,
+      usersChangePct: calcMonthlyDelta(usersThisMonth, usersPrevMonth),
       totalRevenue,
+      revenueThisMonth,
+      revenuePrevMonth,
+      revenueChangePct: calcMonthlyDelta(revenueThisMonth, revenuePrevMonth),
+      activeCourses: publishedCourses,
       todaysEnrollments,
-      activeSubscriptions,
       liveClassesCount,
       pendingPayments,
     },
@@ -72,6 +111,54 @@ router.get('/dashboard', (_req, res) => {
     recentActivity,
     revenueByMethod,
   });
+});
+
+// Cloudinary Upload Signature (signed only if secret is configured; never exposes keys to client)
+router.post('/cloudinary-signature', (req, res) => {
+  const apiKey = process.env.CLOUDINARY_API_KEY || '';
+  const apiSecret = process.env.CLOUDINARY_API_SECRET || '';
+  const preset = process.env.CLOUDINARY_UPLOAD_PRESET || process.env.VITE_CLOUDINARY_UPLOAD_PRESET || '';
+  const folder = String(req.body?.folder || 'o-learning');
+
+  if (!apiKey || !apiSecret) {
+    res.json({ signed: false });
+    return;
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  const toSign = `folder=${folder}&timestamp=${timestamp}${preset ? `&upload_preset=${preset}` : ''}${apiSecret}`;
+  const signature = crypto.createHash('sha1').update(toSign).digest('hex');
+  res.json({ signed: true, signature, timestamp, apiKey });
+});
+
+// Local/Fallback Secure Image Upload Endpoint
+router.post('/upload', (req, res) => {
+  const { filename = 'upload.png', dataUrl } = req.body || {};
+  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+    res.status(400).json({ error: 'Valid image data is required.' });
+    return;
+  }
+  const match = dataUrl.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
+  if (!match) {
+    res.status(400).json({ error: 'Unsupported image encoding.' });
+    return;
+  }
+  const extRaw = match[1].toLowerCase().replace('jpeg', 'jpg').replace('svg+xml', 'svg');
+  const ext = ['png', 'jpg', 'webp', 'gif', 'svg'].includes(extRaw) ? extRaw : 'png';
+  const buf = Buffer.from(match[2], 'base64');
+  if (buf.length > 5 * 1024 * 1024) {
+    res.status(400).json({ error: 'Image size exceeds 5 MB limit.' });
+    return;
+  }
+
+  const uploadDir = process.env.VERCEL
+    ? path.join('/tmp', 'olearning-uploads')
+    : path.resolve(process.cwd(), 'public', 'uploads');
+  fs.mkdirSync(uploadDir, { recursive: true });
+  const safeBase = String(filename).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24) || 'img';
+  const outName = `${safeBase}-${Date.now()}.${ext}`;
+  fs.writeFileSync(path.join(uploadDir, outName), buf);
+  res.status(201).json({ url: `/uploads/${outName}` });
 });
 
 // 2. Students Management
@@ -118,6 +205,120 @@ router.patch('/students/:id/status', (req, res) => {
   const id = Number(req.params.id);
   const { is_active } = req.body || {};
   db.prepare("UPDATE users SET is_active = ? WHERE id = ? AND role = 'student'").run(is_active ? 1 : 0, id);
+  res.json({ ok: true });
+});
+
+// 2b. Unified Users Management (Students, Faculty, Admins)
+const mapRoleToDb = (r?: string): string | null => {
+  if (!r) return null;
+  const up = r.toUpperCase();
+  if (up === 'USER' || up === 'STUDENT') return 'student';
+  if (up === 'ADMIN') return 'admin';
+  if (up === 'FACULTY') return 'faculty';
+  return null;
+};
+
+router.get('/users', (req, res) => {
+  const { search = '', role = 'all', status = 'all' } = req.query;
+  let sql = `
+    SELECT u.id, u.full_name, u.email, u.mobile, u.role, u.referral_code,
+           COALESCE(u.credits, 0) as credits, u.is_active, u.created_at,
+           (SELECT COUNT(*) FROM enrollments e WHERE e.student_id = u.id) as enrollments_count,
+           (SELECT COUNT(*) FROM certificates cert WHERE cert.student_id = u.id) as certificates_count,
+           (SELECT COALESCE(SUM(p.final_amount), 0) FROM payments p WHERE p.student_id = u.id AND p.status = 'successful') as total_spent
+    FROM users u
+    WHERE 1=1
+  `;
+  const params: Array<string | number> = [];
+  if (search) {
+    sql += ' AND (LOWER(u.full_name) LIKE ? OR LOWER(u.email) LIKE ? OR u.mobile LIKE ?)';
+    const q = `%${String(search).toLowerCase()}%`;
+    params.push(q, q, `%${search}%`);
+  }
+  if (role && role !== 'all') {
+    const dbRole = mapRoleToDb(String(role));
+    if (dbRole) {
+      sql += ' AND u.role = ?';
+      params.push(dbRole);
+    }
+  }
+  if (status === 'active') sql += ' AND u.is_active = 1';
+  if (status === 'inactive') sql += ' AND u.is_active = 0';
+  sql += ' ORDER BY u.created_at DESC';
+  res.json(db.prepare(sql).all(...params));
+});
+
+router.get('/users/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const user = db
+    .prepare('SELECT id, full_name, email, mobile, role, referral_code, COALESCE(credits, 0) as credits, is_active, created_at FROM users WHERE id = ?')
+    .get(id);
+  if (!user) {
+    res.status(404).json({ error: 'User not found.' });
+    return;
+  }
+  const enrollments = db
+    .prepare('SELECT e.*, c.title as course_title FROM enrollments e JOIN courses c ON c.id = e.course_id WHERE e.student_id = ?')
+    .all(id);
+  const payments = db.prepare('SELECT * FROM payments WHERE student_id = ? ORDER BY created_at DESC').all(id);
+  const certificates = db.prepare('SELECT * FROM certificates WHERE student_id = ? ORDER BY issued_at DESC').all(id);
+  const referrals = db
+    .prepare(`
+      SELECT cra.*, c.title as course_title, u2.full_name as referred_name
+      FROM course_referral_attributions cra
+      JOIN courses c ON c.id = cra.course_id
+      LEFT JOIN users u2 ON u2.id = cra.referred_user_id
+      WHERE cra.referrer_id = ?
+      ORDER BY cra.created_at DESC
+    `)
+    .all(id);
+  res.json({ user, enrollments, payments, certificates, referrals });
+});
+
+router.put('/users/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const b = req.body || {};
+  const existing = db.prepare('SELECT id, role FROM users WHERE id = ?').get(id) as { id: number; role: string } | undefined;
+  if (!existing) {
+    res.status(404).json({ error: 'User not found.' });
+    return;
+  }
+  const nextRole = b.role ? mapRoleToDb(String(b.role)) : null;
+  db.prepare(`
+    UPDATE users
+    SET full_name = COALESCE(?, full_name),
+        mobile = COALESCE(?, mobile),
+        role = COALESCE(?, role),
+        credits = COALESCE(?, credits),
+        is_active = COALESCE(?, is_active)
+    WHERE id = ?
+  `).run(
+    b.full_name ?? null,
+    b.mobile ?? null,
+    nextRole,
+    b.credits !== undefined ? Number(b.credits) : null,
+    b.is_active !== undefined ? (b.is_active ? 1 : 0) : null,
+    id
+  );
+  res.json(
+    db
+      .prepare('SELECT id, full_name, email, mobile, role, referral_code, COALESCE(credits, 0) as credits, is_active, created_at FROM users WHERE id = ?')
+      .get(id)
+  );
+});
+
+router.delete('/users/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (id === req.user!.id) {
+    res.status(400).json({ error: 'You cannot delete your own active admin account.' });
+    return;
+  }
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
+  if (!target) {
+    res.status(404).json({ error: 'User not found.' });
+    return;
+  }
+  db.prepare('DELETE FROM users WHERE id = ?').run(id);
   res.json({ ok: true });
 });
 
@@ -213,22 +414,56 @@ router.put('/faculty/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// 4. Categories Management
+// 4. Categories Management (with courses count & full edit + image)
 router.get('/categories', (_req, res) => {
-  res.json(db.prepare('SELECT * FROM categories ORDER BY id ASC').all());
+  res.json(
+    db
+      .prepare(`
+        SELECT cat.*,
+               (SELECT COUNT(*) FROM courses c WHERE c.category_id = cat.id) as courses_count
+        FROM categories cat
+        ORDER BY cat.id ASC
+      `)
+      .all()
+  );
 });
 
 router.post('/categories', (req, res) => {
-  const { name, description = '', icon_name = 'BookOpen' } = req.body || {};
+  const { name, slug: customSlug, description = '', image = '', icon_name = 'BookOpen', is_active = 1 } = req.body || {};
   if (!name) {
     res.status(400).json({ error: 'Category name is required.' });
     return;
   }
-  const slug = String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const slug =
+    customSlug && String(customSlug).trim()
+      ? String(customSlug).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      : String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const r = db
-    .prepare('INSERT INTO categories (name, slug, description, icon_name) VALUES (?, ?, ?, ?)')
-    .run(String(name).trim(), slug, description, icon_name);
+    .prepare('INSERT INTO categories (name, slug, description, image, icon_name, is_active) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(String(name).trim(), slug, description, image, icon_name, is_active ? 1 : 0);
   res.status(201).json(db.prepare('SELECT * FROM categories WHERE id = ?').get(Number(r.lastInsertRowid)));
+});
+
+router.put('/categories/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const b = req.body || {};
+  db.prepare(`
+    UPDATE categories
+    SET name = COALESCE(?, name),
+        slug = COALESCE(?, slug),
+        description = COALESCE(?, description),
+        image = COALESCE(?, image),
+        is_active = COALESCE(?, is_active)
+    WHERE id = ?
+  `).run(
+    b.name ?? null,
+    b.slug ? String(b.slug).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : null,
+    b.description ?? null,
+    b.image ?? null,
+    b.is_active !== undefined ? (b.is_active ? 1 : 0) : null,
+    id
+  );
+  res.json(db.prepare('SELECT * FROM categories WHERE id = ?').get(id));
 });
 
 router.delete('/categories/:id', (req, res) => {
@@ -262,15 +497,22 @@ router.get('/courses', (_req, res) => {
 router.post('/courses', (req, res) => {
   const {
     title,
+    slug: customSlug,
     category_id,
     short_description,
     description,
     thumbnail_url = '/images/courses/it-programming.png',
+    banner_image = '',
+    preview_image = '',
+    instructor_image = '',
     level = 'Beginner to Advanced',
     duration = '12 Weeks',
+    language = 'English / Hindi',
+    prerequisites = 'None',
     price = 1999,
     discount_price = null,
     is_free = 0,
+    featured = 0,
     faculty_id = null,
     what_you_learn = [],
     faqs = [],
@@ -282,14 +524,21 @@ router.post('/courses', (req, res) => {
     return;
   }
   const slug =
-    String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') +
-    '-' +
-    crypto.randomInt(10, 99);
+    customSlug && String(customSlug).trim()
+      ? String(customSlug).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      : String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') +
+        '-' +
+        crypto.randomInt(10, 99);
 
   const r = db
     .prepare(`
-      INSERT INTO courses (slug, category_id, title, short_description, description, thumbnail_url, level, duration, price, discount_price, is_free, faculty_id, what_you_learn_json, faqs_json, is_published, display_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 99)
+      INSERT INTO courses (
+        slug, category_id, title, short_description, description,
+        thumbnail_url, banner_image, preview_image, instructor_image,
+        level, duration, language, prerequisites,
+        price, discount_price, is_free, featured, faculty_id,
+        what_you_learn_json, faqs_json, is_published, display_order
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 99)
     `)
     .run(
       slug,
@@ -298,11 +547,17 @@ router.post('/courses', (req, res) => {
       String(short_description).trim(),
       String(description || short_description).trim(),
       thumbnail_url,
+      banner_image,
+      preview_image,
+      instructor_image,
       level,
       duration,
+      language,
+      prerequisites,
       Number(price) || 0,
       discount_price !== null && discount_price !== '' ? Number(discount_price) : null,
       is_free ? 1 : 0,
+      featured ? 1 : 0,
       faculty_id ? Number(faculty_id) : null,
       JSON.stringify(what_you_learn),
       JSON.stringify(faqs),
@@ -320,15 +575,22 @@ router.put('/courses/:id', (req, res) => {
   db.prepare(`
     UPDATE courses
     SET title = COALESCE(?, title),
+        slug = COALESCE(?, slug),
         category_id = COALESCE(?, category_id),
         short_description = COALESCE(?, short_description),
         description = COALESCE(?, description),
         thumbnail_url = COALESCE(?, thumbnail_url),
+        banner_image = COALESCE(?, banner_image),
+        preview_image = COALESCE(?, preview_image),
+        instructor_image = COALESCE(?, instructor_image),
         level = COALESCE(?, level),
         duration = COALESCE(?, duration),
+        language = COALESCE(?, language),
+        prerequisites = COALESCE(?, prerequisites),
         price = COALESCE(?, price),
         discount_price = ?,
         is_free = COALESCE(?, is_free),
+        featured = COALESCE(?, featured),
         faculty_id = COALESCE(?, faculty_id),
         what_you_learn_json = COALESCE(?, what_you_learn_json),
         faqs_json = COALESCE(?, faqs_json),
@@ -336,17 +598,24 @@ router.put('/courses/:id', (req, res) => {
     WHERE id = ?
   `).run(
     b.title ?? null,
+    b.slug ? String(b.slug).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : null,
     b.category_id !== undefined ? (b.category_id ? Number(b.category_id) : null) : null,
     b.short_description ?? null,
     b.description ?? null,
     b.thumbnail_url ?? null,
+    b.banner_image ?? null,
+    b.preview_image ?? null,
+    b.instructor_image ?? null,
     b.level ?? null,
     b.duration ?? null,
+    b.language ?? null,
+    b.prerequisites ?? null,
     b.price !== undefined ? Number(b.price) : null,
     b.discount_price !== undefined && b.discount_price !== '' && b.discount_price !== null
       ? Number(b.discount_price)
       : null,
     b.is_free !== undefined ? (b.is_free ? 1 : 0) : null,
+    b.featured !== undefined ? (b.featured ? 1 : 0) : null,
     b.faculty_id !== undefined ? (b.faculty_id ? Number(b.faculty_id) : null) : null,
     b.what_you_learn ? JSON.stringify(b.what_you_learn) : null,
     b.faqs ? JSON.stringify(b.faqs) : null,
@@ -354,6 +623,64 @@ router.put('/courses/:id', (req, res) => {
     id
   );
   res.json(db.prepare('SELECT * FROM courses WHERE id = ?').get(id));
+});
+
+router.post('/courses/:id/duplicate', (req, res) => {
+  const srcId = Number(req.params.id);
+  const src = db.prepare('SELECT * FROM courses WHERE id = ?').get(srcId) as Record<string, any> | undefined;
+  if (!src) {
+    res.status(404).json({ error: 'Course not found.' });
+    return;
+  }
+  const newSlug = `${src.slug}-copy-${crypto.randomInt(100, 999)}`;
+  const r = db
+    .prepare(`
+      INSERT INTO courses (
+        slug, category_id, title, short_description, description,
+        thumbnail_url, banner_image, preview_image, instructor_image,
+        level, duration, language, prerequisites,
+        price, discount_price, is_free, featured, faculty_id,
+        what_you_learn_json, faqs_json, is_published, display_order
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 99)
+    `)
+    .run(
+      newSlug,
+      src.category_id,
+      `${src.title} (Copy)`,
+      src.short_description,
+      src.description,
+      src.thumbnail_url,
+      src.banner_image || '',
+      src.preview_image || '',
+      src.instructor_image || '',
+      src.level,
+      src.duration,
+      src.language || 'English / Hindi',
+      src.prerequisites || 'None',
+      src.price,
+      src.discount_price,
+      src.is_free,
+      0,
+      src.faculty_id,
+      src.what_you_learn_json,
+      src.faqs_json
+    );
+  const newId = Number(r.lastInsertRowid);
+  const mods = db.prepare('SELECT * FROM modules WHERE course_id = ?').all(srcId) as Array<Record<string, any>>;
+  for (const m of mods) {
+    const nm = db
+      .prepare('INSERT INTO modules (course_id, title, description, sort_order) VALUES (?, ?, ?, ?)')
+      .run(newId, m.title, m.description, m.sort_order);
+    const newModId = Number(nm.lastInsertRowid);
+    const lessons = db.prepare('SELECT * FROM lessons WHERE module_id = ?').all(m.id) as Array<Record<string, any>>;
+    for (const l of lessons) {
+      db.prepare(`
+        INSERT INTO lessons (module_id, course_id, title, lesson_type, video_url, material_url, duration_minutes, content_text, is_preview, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(newModId, newId, l.title, l.lesson_type, l.video_url, l.material_url, l.duration_minutes, l.content_text, l.is_preview, l.sort_order);
+    }
+  }
+  res.status(201).json(db.prepare('SELECT * FROM courses WHERE id = ?').get(newId));
 });
 
 router.delete('/courses/:id', (req, res) => {
@@ -532,16 +859,17 @@ router.delete('/live-classes/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// 8. Tests & Questions Management
+// 8. Tests & Quizzes Management
 router.get('/tests', (_req, res) => {
   res.json(
     db
       .prepare(`
-        SELECT t.*, c.title as course_title,
+        SELECT t.*, c.title as course_title, cat.name as category_name,
                (SELECT COUNT(*) FROM questions q WHERE q.test_id = t.id) as questions_count,
                (SELECT COUNT(*) FROM test_attempts ta WHERE ta.test_id = t.id) as attempts_count
         FROM tests t
         LEFT JOIN courses c ON c.id = t.course_id
+        LEFT JOIN categories cat ON cat.id = c.category_id
         ORDER BY t.id DESC
       `)
       .all()
@@ -549,17 +877,44 @@ router.get('/tests', (_req, res) => {
 });
 
 router.post('/tests', (req, res) => {
-  const { title, course_id, description = '', duration_minutes = 20, total_marks = 10, pass_marks = 5, negative_marks = 0, difficulty = 'Medium', is_published = 1 } = req.body || {};
+  const {
+    title,
+    course_id,
+    description = '',
+    duration_minutes = 20,
+    total_marks = 10,
+    pass_marks = 5,
+    negative_marks = 0,
+    difficulty = 'Medium',
+    is_published = 1,
+    price = 0,
+    certificate_enabled = 0,
+    expiry_date = '',
+  } = req.body || {};
   if (!title) {
-    res.status(400).json({ error: 'Test title is required.' });
+    res.status(400).json({ error: 'Quiz title is required.' });
     return;
   }
   const r = db
     .prepare(`
-      INSERT INTO tests (title, course_id, description, duration_minutes, total_marks, pass_marks, negative_marks, difficulty, is_published, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tests (title, course_id, description, duration_minutes, total_marks, pass_marks, negative_marks, difficulty, is_published, price, certificate_enabled, expiry_date, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
-    .run(title, course_id ? Number(course_id) : null, description, Number(duration_minutes), Number(total_marks), Number(pass_marks), Number(negative_marks), difficulty, is_published ? 1 : 0, req.user!.id);
+    .run(
+      title,
+      course_id ? Number(course_id) : null,
+      description,
+      Number(duration_minutes),
+      Number(total_marks),
+      Number(pass_marks),
+      Number(negative_marks),
+      difficulty,
+      is_published ? 1 : 0,
+      Number(price || 0),
+      certificate_enabled ? 1 : 0,
+      String(expiry_date || ''),
+      req.user!.id
+    );
   res.status(201).json(db.prepare('SELECT * FROM tests WHERE id = ?').get(Number(r.lastInsertRowid)));
 });
 
@@ -576,11 +931,14 @@ router.put('/tests/:id', (req, res) => {
         pass_marks = COALESCE(?, pass_marks),
         negative_marks = COALESCE(?, negative_marks),
         difficulty = COALESCE(?, difficulty),
-        is_published = COALESCE(?, is_published)
+        is_published = COALESCE(?, is_published),
+        price = COALESCE(?, price),
+        certificate_enabled = COALESCE(?, certificate_enabled),
+        expiry_date = COALESCE(?, expiry_date)
     WHERE id = ?
   `).run(
     b.title ?? null,
-    b.course_id ? Number(b.course_id) : null,
+    b.course_id !== undefined ? (b.course_id ? Number(b.course_id) : null) : null,
     b.description ?? null,
     b.duration_minutes !== undefined ? Number(b.duration_minutes) : null,
     b.total_marks !== undefined ? Number(b.total_marks) : null,
@@ -588,6 +946,9 @@ router.put('/tests/:id', (req, res) => {
     b.negative_marks !== undefined ? Number(b.negative_marks) : null,
     b.difficulty ?? null,
     b.is_published !== undefined ? (b.is_published ? 1 : 0) : null,
+    b.price !== undefined ? Number(b.price) : null,
+    b.certificate_enabled !== undefined ? (b.certificate_enabled ? 1 : 0) : null,
+    b.expiry_date !== undefined ? String(b.expiry_date) : null,
     id
   );
   res.json(db.prepare('SELECT * FROM tests WHERE id = ?').get(id));
@@ -672,6 +1033,34 @@ router.delete('/plans/:id', (req, res) => {
 });
 
 // 10. Payments & Enrollments Management
+const normalizePaymentStatus = (raw?: string): string | null => {
+  if (!raw || raw === 'all') return null;
+  const low = raw.toLowerCase();
+  if (low === 'created' || low === 'pending') return 'pending';
+  if (low === 'processing') return 'processing';
+  if (low === 'success' || low === 'successful') return 'successful';
+  if (low === 'failed') return 'failed';
+  if (low === 'refunded') return 'refunded';
+  return null;
+};
+
+const toDisplayPaymentStatus = (dbStatus: string): string => {
+  switch (dbStatus) {
+    case 'successful':
+      return 'Success';
+    case 'processing':
+      return 'Processing';
+    case 'pending':
+      return 'Pending';
+    case 'failed':
+      return 'Failed';
+    case 'refunded':
+      return 'Refunded';
+    default:
+      return dbStatus;
+  }
+};
+
 router.get('/payments', (req, res) => {
   const { status = 'all' } = req.query;
   let sql = `
@@ -680,23 +1069,56 @@ router.get('/payments', (req, res) => {
     JOIN users u ON u.id = p.student_id
   `;
   const params: string[] = [];
-  if (status && status !== 'all') {
+  const norm = normalizePaymentStatus(String(status));
+  if (norm) {
     sql += ' WHERE p.status = ?';
-    params.push(String(status));
+    params.push(norm);
   }
   sql += ' ORDER BY p.created_at DESC';
-  res.json(db.prepare(sql).all(...params));
+  const rows = db.prepare(sql).all(...params) as Array<Record<string, unknown>>;
+  res.json(
+    rows.map((p) => ({
+      ...p,
+      display_status: toDisplayPaymentStatus(String(p.status || 'pending')),
+    }))
+  );
 });
 
 router.patch('/payments/:id/status', (req, res) => {
   const id = Number(req.params.id);
   const { status } = req.body || {};
-  if (!['pending', 'processing', 'successful', 'failed', 'refunded'].includes(status)) {
+  const norm = normalizePaymentStatus(String(status || ''));
+  if (!norm) {
     res.status(400).json({ error: 'Invalid payment status.' });
     return;
   }
-  db.prepare('UPDATE payments SET status = ? WHERE id = ?').run(status, id);
-  res.json({ ok: true });
+  const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(id) as
+    | { id: number; student_id: number; item_type: string; item_id: number; item_title: string; status: string }
+    | undefined;
+  if (!payment) {
+    res.status(404).json({ error: 'Payment not found.' });
+    return;
+  }
+
+  db.prepare('UPDATE payments SET status = ? WHERE id = ?').run(norm, id);
+
+  // Strict business rule: ONLY Success / successful activates course enrollment
+  if (norm === 'successful' && payment.item_type === 'course') {
+    const enrolled = db
+      .prepare('SELECT id FROM enrollments WHERE student_id = ? AND course_id = ?')
+      .get(payment.student_id, payment.item_id);
+    if (!enrolled) {
+      db.prepare(`
+        INSERT INTO enrollments (student_id, course_id, status, progress_percent, completed_lessons_json)
+        VALUES (?, ?, 'active', 0, '[]')
+      `).run(payment.student_id, payment.item_id);
+      db.prepare(`
+        INSERT INTO notifications (user_id, title, message, type)
+        VALUES (?, 'Payment Confirmed!', ?, 'success')
+      `).run(payment.student_id, `Your payment for "${payment.item_title}" is confirmed and course access is now active.`);
+    }
+  }
+  res.json({ ok: true, status: norm, display_status: toDisplayPaymentStatus(norm) });
 });
 
 router.get('/enrollments', (_req, res) => {
@@ -752,22 +1174,57 @@ router.get('/referrals', (_req, res) => {
   const attributions = db
     .prepare(`
       SELECT cra.id, cra.referral_code, cra.created_at, c.title as course_title,
+             COALESCE(c.discount_price, c.price, 0) as course_price,
              COALESCE(u1.full_name, 'Guest / Direct') as referrer_name,
-             u2.full_name as referred_student_name
+             u2.full_name as referred_student_name,
+             COALESCE(p.final_amount, 0) as paid_amount
       FROM course_referral_attributions cra
       JOIN courses c ON c.id = cra.course_id
       LEFT JOIN users u1 ON u1.id = cra.referrer_id
       JOIN users u2 ON u2.id = cra.referred_user_id
+      LEFT JOIN payments p ON p.id = cra.payment_id AND p.status = 'successful'
       ORDER BY cra.created_at DESC
-      LIMIT 30
+      LIMIT 50
     `)
-    .all();
+    .all() as Array<{ paid_amount: number }>;
+
+  const totalReferrals = signupReferrals.length + courseReferrals.length;
+  const totalClicks = courseReferrals.reduce((acc, r) => acc + Number(r.clicks || 0), 0);
+  const registeredLeads = signupReferrals.length + attributions.length;
+  const successfulEnrollments = courseReferrals.reduce((acc, r) => acc + Number(r.enrollments_count || 0), 0);
+  const referralRevenue = attributions.reduce((acc, a) => acc + Number(a.paid_amount || 0), 0);
+  const signupRewards = signupReferrals.reduce(
+    (acc, r) => acc + Number((r as Record<string, unknown>).reward_amount || 0),
+    0
+  );
+  const redemptionRewardsRow = db
+    .prepare('SELECT COALESCE(SUM(amount), 0) as total FROM redemptions WHERE LOWER(status) != ?')
+    .get('rejected') as { total: number };
+
+  const cmsRow = db.prepare("SELECT value_json FROM cms_settings WHERE key = 'referral'").get() as
+    | { value_json: string }
+    | undefined;
+  const referralSettings = cmsRow ? (JSON.parse(cmsRow.value_json) as Record<string, unknown>) : {};
+  const perEnrollReward = Number(referralSettings.rewardAmount ?? 150);
+  const rewardsGenerated = Math.max(
+    signupRewards + successfulEnrollments * perEnrollReward,
+    Number(redemptionRewardsRow?.total || 0)
+  );
 
   res.json({
+    summary: {
+      totalReferrals,
+      totalClicks,
+      registeredLeads,
+      successfulEnrollments,
+      referralRevenue,
+      rewardsGenerated,
+    },
     signupReferrals,
     courseReferrals: courseReferralsWithRates,
     eventSummary,
     attributions,
+    referralSettings,
   });
 });
 
@@ -786,6 +1243,43 @@ router.get('/certificates', (_req, res) => {
   res.json(db.prepare('SELECT * FROM certificates ORDER BY issued_at DESC').all());
 });
 
+router.post('/certificates', (req, res) => {
+  const { student_id, course_id } = req.body || {};
+  if (!student_id || !course_id) {
+    res.status(400).json({ error: 'Student and course are required.' });
+    return;
+  }
+  const student = db.prepare('SELECT id, full_name FROM users WHERE id = ?').get(Number(student_id)) as
+    | { id: number; full_name: string }
+    | undefined;
+  const course = db.prepare('SELECT id, title FROM courses WHERE id = ?').get(Number(course_id)) as
+    | { id: number; title: string }
+    | undefined;
+  if (!student || !course) {
+    res.status(404).json({ error: 'Student or course not found.' });
+    return;
+  }
+  const existing = db
+    .prepare('SELECT * FROM certificates WHERE student_id = ? AND course_id = ?')
+    .get(student.id, course.id);
+  if (existing) {
+    res.json(existing);
+    return;
+  }
+  const certificateCode = `OLRN-${new Date().getFullYear()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+  const r = db
+    .prepare(`
+      INSERT INTO certificates (certificate_code, student_id, course_id, student_name, course_title, status)
+      VALUES (?, ?, ?, ?, ?, 'valid')
+    `)
+    .run(certificateCode, student.id, course.id, student.full_name, course.title);
+  db.prepare(`
+    INSERT INTO notifications (user_id, title, message, type)
+    VALUES (?, 'Certificate Issued!', ?, 'success')
+  `).run(student.id, `Your completion certificate (${certificateCode}) for "${course.title}" is now available.`);
+  res.status(201).json(db.prepare('SELECT * FROM certificates WHERE id = ?').get(Number(r.lastInsertRowid)));
+});
+
 router.patch('/certificates/:id/status', (req, res) => {
   const id = Number(req.params.id);
   const { status } = req.body || {};
@@ -795,6 +1289,74 @@ router.patch('/certificates/:id/status', (req, res) => {
   }
   db.prepare('UPDATE certificates SET status = ? WHERE id = ?').run(status, id);
   res.json({ ok: true });
+});
+
+router.delete('/certificates/:id', (req, res) => {
+  db.prepare('DELETE FROM certificates WHERE id = ?').run(Number(req.params.id));
+  res.json({ ok: true });
+});
+
+// 11b. Redemptions Management
+const normalizeRedemptionStatus = (raw?: string): string | null => {
+  if (!raw || raw === 'all') return null;
+  const low = raw.toLowerCase();
+  if (low === 'pending') return 'Pending';
+  if (low === 'approved') return 'Approved';
+  if (low === 'paid') return 'Paid';
+  if (low === 'rejected') return 'Rejected';
+  return null;
+};
+
+router.get('/redemptions', (req, res) => {
+  const { status = 'all' } = req.query;
+  let sql = `
+    SELECT red.*, red.account_reference as account_details,
+           u.full_name as user_name, u.email as user_email, COALESCE(u.credits, 0) as user_credits
+    FROM redemptions red
+    JOIN users u ON u.id = red.user_id
+  `;
+  const params: string[] = [];
+  const norm = normalizeRedemptionStatus(String(status));
+  if (norm) {
+    sql += ' WHERE red.status = ?';
+    params.push(norm);
+  }
+  sql += ' ORDER BY red.created_at DESC';
+  res.json(db.prepare(sql).all(...params));
+});
+
+router.post('/redemptions', (req, res) => {
+  const { user_id, amount, method = 'UPI', account_reference, account_details = '', notes = '' } = req.body || {};
+  if (!user_id || !amount || Number(amount) <= 0) {
+    res.status(400).json({ error: 'Valid user and positive amount are required.' });
+    return;
+  }
+  const ref = String(account_reference ?? account_details ?? '');
+  const r = db
+    .prepare(`
+      INSERT INTO redemptions (user_id, amount, method, account_reference, status, notes)
+      VALUES (?, ?, ?, ?, 'Pending', ?)
+    `)
+    .run(Number(user_id), Number(amount), String(method), ref, String(notes));
+  res.status(201).json(db.prepare('SELECT *, account_reference as account_details FROM redemptions WHERE id = ?').get(Number(r.lastInsertRowid)));
+});
+
+router.patch('/redemptions/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const { status, notes } = req.body || {};
+  const norm = status ? normalizeRedemptionStatus(String(status)) : null;
+  if (status && !norm) {
+    res.status(400).json({ error: 'Invalid redemption status.' });
+    return;
+  }
+  db.prepare(`
+    UPDATE redemptions
+    SET status = COALESCE(?, status),
+        notes = COALESCE(?, notes),
+        updated_at = datetime('now')
+    WHERE id = ?
+  `).run(norm, notes ?? null, id);
+  res.json(db.prepare('SELECT *, account_reference as account_details FROM redemptions WHERE id = ?').get(id));
 });
 
 // 12. Contact Enquiries Management

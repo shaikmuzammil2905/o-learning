@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Search, SlidersHorizontal } from 'lucide-react';
 import { PublicLayout } from '../../components/PublicLayout';
 import { CourseCard } from '../../components/CourseCard';
@@ -9,9 +9,14 @@ import { useSite } from '../../context/SiteContext';
 
 export function CoursesPage() {
   const { courses: allCourses, categories } = useSite();
+  const { slug: routeSlug } = useParams<{ slug?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('search') || '');
-  const [category, setCategory] = useState(searchParams.get('category') || 'all');
+  const [category, setCategory] = useState(routeSlug || searchParams.get('category') || 'all');
+
+  useEffect(() => {
+    if (routeSlug) setCategory(routeSlug);
+  }, [routeSlug]);
 
   const courses = useMemo(() => {
     const q = search.trim().toLowerCase();
