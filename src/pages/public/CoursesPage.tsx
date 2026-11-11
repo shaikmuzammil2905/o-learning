@@ -1,39 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, SlidersHorizontal } from 'lucide-react';
 import { PublicLayout } from '../../components/PublicLayout';
 import { CourseCard } from '../../components/CourseCard';
-import { EmptyState, LoadingState } from '../../components/ui/StateViews';
+import { EmptyState } from '../../components/ui/StateViews';
+import { RevealOnScroll } from '../../components/ui/Animations';
 import { useSite } from '../../context/SiteContext';
-import { api } from '../../lib/api';
-import type { Course } from '../../types';
 
 export function CoursesPage() {
-  const { categories } = useSite();
+  const { courses: allCourses, categories } = useSite();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [category, setCategory] = useState(searchParams.get('category') || 'all');
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (category !== 'all') params.set('category', category);
-    if (search.trim()) params.set('search', search.trim());
-
-    api<Course[]>(`/api/public/courses?${params.toString()}`)
-      .then((data) => {
-        if (active) setCourses(data);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [category, search]);
+  const courses = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return allCourses.filter((c) => {
+      const catMatch =
+        category === 'all' ||
+        c.category_slug === category ||
+        String(c.category_id) === category;
+      const searchMatch =
+        !q ||
+        c.title.toLowerCase().includes(q) ||
+        c.short_description.toLowerCase().includes(q) ||
+        c.description.toLowerCase().includes(q);
+      return catMatch && searchMatch;
+    });
+  }, [allCourses, category, search]);
 
   const handleCategoryChange = (slug: string) => {
     setCategory(slug);
@@ -46,12 +40,14 @@ export function CoursesPage() {
     <PublicLayout>
       <section className="bg-gradient-to-r from-[#00338D] to-[#0052CC] text-white py-10 sm:py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="font-display font-extrabold text-2xl sm:text-4xl">
-            Explore Our Courses & Programs
-          </h1>
-          <p className="text-sm sm:text-base text-blue-100 mt-2 max-w-2xl">
-            Structured video lessons, live mentor classes, downloadable study notes, and practice mock tests — built for career & exam success.
-          </p>
+          <RevealOnScroll>
+            <h1 className="font-display font-extrabold text-2xl sm:text-4xl">
+              Explore Our Courses & Programs
+            </h1>
+            <p className="text-sm sm:text-base text-blue-100 mt-2 max-w-2xl">
+              Structured video lessons, live mentor classes, downloadable study notes, and practice mock tests — built for career & exam success.
+            </p>
+          </RevealOnScroll>
 
           <div className="mt-6 flex flex-col sm:flex-row gap-3 max-w-2xl">
             <div className="relative flex-1">
@@ -101,9 +97,7 @@ export function CoursesPage() {
           ))}
         </div>
 
-        {loading ? (
-          <LoadingState message="Loading courses…" />
-        ) : courses.length === 0 ? (
+        {courses.length === 0 ? (
           <EmptyState
             title="No matching courses found"
             description="Try clearing your search filter or exploring another category."
@@ -121,8 +115,10 @@ export function CoursesPage() {
           />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {courses.map((course) => (
-              <CourseCard key={course.id} course={course} />
+            {courses.map((course, idx) => (
+              <RevealOnScroll key={course.id} delay={idx * 50}>
+                <CourseCard course={course} />
+              </RevealOnScroll>
             ))}
           </div>
         )}
@@ -130,4 +126,3 @@ export function CoursesPage() {
     </PublicLayout>
   );
 }
-

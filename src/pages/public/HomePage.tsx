@@ -6,6 +6,7 @@ import {
   BadgeCheck,
   BookOpen,
   Check,
+  CheckCircle2,
   ClipboardCheck,
   Headphones,
   Info,
@@ -38,48 +39,120 @@ const WHY_CHOOSE_ITEMS = [
   {
     label: 'Expert Faculty',
     icon: Users,
-    summary: 'Learn directly from IIT, UPSC, CELTA, and industry mentors with 10–15+ years of proven teaching experience.',
-    highlights: ['Live interactive teaching', 'Structured concept clarity', 'Real-world exam & career tips'],
+    badge: '50+ Mentors · 10–15+ Yrs Exp',
+    summary:
+      'Learn directly from IIT alumni, retired civil services mentors, Cambridge CELTA trainers, and senior Hyderabad software architects who break down complex concepts step by step.',
+    metrics: [
+      { label: 'Avg Experience', value: '12+ Years' },
+      { label: 'Live Doubt Solving', value: 'Daily Q&A' },
+      { label: 'Mentorship Style', value: '1-on-1 & Cohort' },
+    ],
+    highlights: [
+      'Live interactive teaching with real-time chat and screen walkthroughs',
+      'Structured module-by-module syllabus aligned to 2026 exam & hiring patterns',
+      'Bilingual-friendly clarity tailored for Indian college & competitive aspirants',
+      'Personalized feedback on spoken English recordings, Mains answers & code assignments',
+    ],
     ctaTo: '/about',
     ctaLabel: 'Meet Our Faculty',
   },
   {
     label: 'Affordable Courses',
     icon: ShieldCheck,
-    summary: 'High-impact education priced fairly for Indian learners, with free starter programs and flexible plans.',
-    highlights: ['Plans starting at ₹1,499', 'Free Career Kickstart course', 'Zero hidden fees'],
+    badge: 'Starting ₹799 · Free Track Included',
+    summary:
+      'We believe world-class career and exam coaching should never be locked behind ₹50,000+ fees. O-LEARNING PLATFORM offers transparent pricing, free skill tracks, and flexible subscription bundles.',
+    metrics: [
+      { label: 'Plans From', value: '₹1,499' },
+      { label: 'Free Starter', value: 'Included' },
+      { label: 'Hidden Charges', value: 'Zero' },
+    ],
+    highlights: [
+      'Free Career Development & Professional Skills track with official certificate',
+      'Up to 50% scholarship discounts across Spoken English, Aptitude & IT courses',
+      'Save more with 3-Month, 6-Month, and 12-Month All-Access Subscription Plans',
+      'UPI, Debit/Credit Card, NetBanking & Wallet support with instant enrollment',
+    ],
     ctaTo: '/plans',
-    ctaLabel: 'View Plans',
+    ctaLabel: 'Compare Plans',
   },
   {
     label: 'Flexible Learning',
     icon: Video,
-    summary: 'Attend scheduled live batches or revise anytime on desktop and mobile with HD recorded lessons & notes.',
-    highlights: ['24/7 recorded access', 'Mobile & desktop sync', 'Downloadable PDF notes'],
+    badge: 'Desktop + Mobile Sync',
+    summary:
+      'Study on your schedule—attend live evening/morning batches or revise anytime at 1.5x speed with HD recorded video lectures, downloadable PDF notes, and mobile-first course player.',
+    metrics: [
+      { label: 'Video Access', value: '24/7 HD' },
+      { label: 'Notes Format', value: 'PDF / Text' },
+      { label: 'Devices', value: 'Web & Mobile' },
+    ],
+    highlights: [
+      'Automatic lesson progress syncing across mobile and desktop browsers',
+      'Downloadable module handbooks, formula sheets & cheat-sheets for offline revision',
+      'Missed a live class? Watch the full recording inside your Live Classes portal',
+      'Self-paced + cohort-paced options suited for students and working professionals',
+    ],
     ctaTo: '/courses',
-    ctaLabel: 'Explore Courses',
+    ctaLabel: 'Browse Courses',
   },
   {
     label: 'Practice & Mock Tests',
     icon: ClipboardCheck,
-    summary: 'Timed test engine simulating real exam interfaces with instant scorecards, ranks, and answer keys.',
-    highlights: ['Auto-submit timer', 'Negative marking mode', 'Detailed explanations'],
+    badge: 'Timed CBT Interface',
+    summary:
+      'Build real exam temperament before test day with our timed computer-based test engine featuring question navigation palettes, negative marking, auto-submission, and detailed explanations.',
+    metrics: [
+      { label: 'Timer Mode', value: 'Auto-Submit' },
+      { label: 'Scoring', value: 'Instant Rank' },
+      { label: 'Solutions', value: 'Step-by-Step' },
+    ],
+    highlights: [
+      'Sectional & full-length mock tests for Spoken English, Aptitude, IT, JEE/NEET & UPSC',
+      'Question status palette showing answered, skipped, and current question at a glance',
+      'Instant percentile/rank calculation and accuracy percentage breakdown',
+      'Full answer-key review with detailed conceptual explanations after submission',
+    ],
     ctaTo: '/tests',
     ctaLabel: 'Try Mock Tests',
   },
   {
     label: 'Doubt Support',
     icon: Headphones,
-    summary: 'Never stay stuck on a question—get live mentor Q&A, batch discussions, and WhatsApp counselor support.',
-    highlights: ['Dedicated live Q&A', 'WhatsApp helpline 9121403515', 'Mentor feedback'],
+    badge: 'Dedicated Counselor & Mentor Help',
+    summary:
+      'Stay confident throughout your preparation with live class Q&A, faculty feedback, and direct academic support via phone and WhatsApp from our Hyderabad student success desk.',
+    metrics: [
+      { label: 'WhatsApp', value: '9121403515' },
+      { label: 'Helpline', value: '8978991329' },
+      { label: 'Response', value: 'Fast & Direct' },
+    ],
+    highlights: [
+      'Ask doubts live during interactive faculty sessions without hesitation',
+      'Direct WhatsApp & phone counseling for batch selection and career guidance',
+      'Dedicated student enquiry tracking with rapid mentor callbacks',
+      'Peer learning cohorts to discuss assignments and interview prep',
+    ],
     ctaTo: '/contact',
     ctaLabel: 'Contact Support',
   },
   {
     label: 'Certified Courses',
     icon: Award,
-    summary: 'Earn an official, QR/ID-verifiable O-LEARNING PLATFORM certificate upon 100% course completion.',
-    highlights: ['Unique Certificate ID', 'Instant PDF print/download', 'Public employer verification'],
+    badge: 'ID-Verified Digital Certificates',
+    summary:
+      'Every completed program unlocks an official O-LEARNING PLATFORM Certificate featuring a unique verification code that employers, universities, and recruiters can verify online.',
+    metrics: [
+      { label: 'Issuance', value: 'Automatic' },
+      { label: 'Format', value: 'Print / PDF' },
+      { label: 'Verification', value: 'Public ID' },
+    ],
+    highlights: [
+      'Automatically generated as soon as you complete 100% of required course lessons',
+      'Displays student name, course title, issue date, unique Certificate ID & seal',
+      'One-click Print / Save as PDF formatted cleanly for LinkedIn & resumes',
+      'Public /verify-certificate lookup portal for instant recruiter validation',
+    ],
     ctaTo: '/verify-certificate',
     ctaLabel: 'Verify Certificate',
   },
@@ -100,7 +173,7 @@ export function HomePage() {
 
   return (
     <PublicLayout>
-      {/* ================= HERO SECTION (Clean — right card removed per request) ================= */}
+      {/* ================= HERO SECTION ================= */}
       {/* DESKTOP HERO (image copy 3.png animated background) */}
       <section className="hidden md:block relative overflow-hidden min-h-[500px] lg:min-h-[540px] bg-[#0046B8]">
         <img
@@ -136,7 +209,7 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* MOBILE HERO (image copy 2.png animated background ONLY — clean without right card) */}
+      {/* MOBILE HERO (image copy 2.png animated background ONLY) */}
       <section className="md:hidden relative overflow-hidden min-h-[340px] bg-[#0046B8]">
         <img
           src={cms.hero.mobileBgUrl || '/images/hero-mobile-bg.png'}
@@ -172,7 +245,7 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* ================= TRUST / STATISTICS STRIP (Larger Size + Typing Number Mode) ================= */}
+      {/* ================= TRUST / STATISTICS STRIP (Grand Size + Typing Number Mode) ================= */}
       <section className="relative z-20 max-w-6xl mx-auto px-4 sm:px-6 -mt-8 md:-mt-10">
         <RevealOnScroll>
           <div className="bg-white rounded-3xl shadow-xl border border-slate-200/90 px-5 py-6 sm:px-8 sm:py-8 grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-0 lg:divide-x divide-slate-200">
@@ -221,7 +294,7 @@ export function HomePage() {
         </form>
       </section>
 
-      {/* ================= OUR COURSES (8 Primary Courses Grid with Animations) ================= */}
+      {/* ================= OUR COURSES (Grand Custom Course Artwork Cards — Desktop & Mobile) ================= */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 sm:pt-16 pb-10">
         <div className="flex items-end justify-between gap-4 mb-7">
           <div>
@@ -238,7 +311,7 @@ export function HomePage() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 sm:gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {courses.slice(0, 8).map((course, idx) => {
             const isBlueIcon = course.icon_color === 'blue';
             const effectivePrice = course.discount_price ?? course.price;
@@ -246,43 +319,45 @@ export function HomePage() {
               <RevealOnScroll key={course.id} delay={idx * 60}>
                 <Link
                   to={`/courses/${course.slug}`}
-                  className="group bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 p-4 sm:p-5 flex flex-col h-full"
+                  className="group bg-white rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 overflow-hidden flex flex-col h-full"
                 >
-                  <div className="relative rounded-xl overflow-hidden aspect-[16/9] mb-3.5 bg-blue-50">
+                  <div className="relative aspect-[16/9] bg-blue-50 overflow-hidden">
                     <img
                       src={course.thumbnail_url}
                       alt={course.title}
                       loading="lazy"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                     <div
-                      className={`absolute bottom-2 left-2 w-8 h-8 rounded-lg flex items-center justify-center shadow-md ${
+                      className={`absolute bottom-2.5 left-2.5 w-8 h-8 rounded-xl flex items-center justify-center shadow-lg ring-2 ring-white/80 ${
                         isBlueIcon ? 'bg-[#0052CC] text-white' : 'bg-[#FF7A00] text-white'
                       }`}
                     >
                       <CourseIcon name={course.icon_name} className="w-4 h-4" />
                     </div>
                     {course.is_free === 1 && (
-                      <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold">
+                      <span className="absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow">
                         FREE
                       </span>
                     )}
                   </div>
 
-                  <h3 className="font-display font-bold text-sm sm:text-base text-[#0F172A] group-hover:text-[#0052CC] transition-colors leading-snug">
-                    {course.title}
-                  </h3>
-                  <p className="text-[11px] sm:text-xs text-slate-600 mt-1.5 line-clamp-3 flex-1 leading-relaxed">
-                    {course.short_description}
-                  </p>
+                  <div className="p-4 sm:p-5 flex-1 flex flex-col">
+                    <h3 className="font-display font-bold text-base sm:text-[17px] text-[#0F172A] group-hover:text-[#0052CC] transition-colors leading-snug">
+                      {course.title}
+                    </h3>
+                    <p className="text-xs text-slate-600 mt-1.5 line-clamp-3 flex-1 leading-relaxed">
+                      {course.short_description}
+                    </p>
 
-                  <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-                    <span className="font-bold text-[#00338D]">
-                      {course.is_free === 1 ? 'Free' : formatCurrency(effectivePrice)}
-                    </span>
-                    <span className="font-bold text-[#FF7A00] inline-flex items-center gap-0.5 group-hover:translate-x-0.5 transition">
-                      Enroll <ArrowRight className="w-3 h-3" />
-                    </span>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                      <span className="font-display font-extrabold text-sm text-[#00338D]">
+                        {course.is_free === 1 ? 'Free' : formatCurrency(effectivePrice)}
+                      </span>
+                      <span className="font-bold text-[#FF7A00] inline-flex items-center gap-1 group-hover:translate-x-0.5 transition">
+                        Enroll Now <ArrowRight className="w-3.5 h-3.5" />
+                      </span>
+                    </div>
                   </div>
                 </Link>
               </RevealOnScroll>
@@ -331,14 +406,14 @@ export function HomePage() {
         </RevealOnScroll>
       </section>
 
-      {/* ================= WHY CHOOSE O-LEARNING PLATFORM (Interactive Popups!) ================= */}
+      {/* ================= WHY CHOOSE O-LEARNING PLATFORM (Enriched Interactive Popups) ================= */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center mb-9">
           <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-[#002B7A]">
             Why Choose O-Learning Platform?
           </h2>
           <div className="w-16 h-1 rounded-full bg-[#FF7A00] mx-auto mt-2.5" />
-          <p className="text-xs text-slate-500 mt-2">Click any pillar to see how it powers your learning</p>
+          <p className="text-xs text-slate-500 mt-2">Tap any card for detailed platform highlights</p>
         </div>
 
         <RevealOnScroll>
@@ -358,8 +433,8 @@ export function HomePage() {
                   <p className="text-xs sm:text-sm font-bold text-[#0F172A] leading-snug">
                     {item.label}
                   </p>
-                  <span className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-[#0052CC] opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Info className="w-3 h-3" /> Quick Info
+                  <span className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-[#0052CC] opacity-80 group-hover:opacity-100">
+                    <Info className="w-3 h-3" /> Explore
                   </span>
                 </button>
               );
@@ -368,7 +443,7 @@ export function HomePage() {
         </RevealOnScroll>
       </section>
 
-      {/* ================= SUBSCRIPTION PLANS PREVIEW (Popups & Scroll Animation!) ================= */}
+      {/* ================= SUBSCRIPTION PLANS PREVIEW (Popups & Scroll Animation) ================= */}
       {plans.length > 0 && (
         <section className="bg-gradient-to-b from-slate-50 to-white py-12 border-t border-slate-200/70">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -459,22 +534,29 @@ export function HomePage() {
         </section>
       )}
 
-      {/* WHY CHOOSE POPUP MODAL */}
+      {/* ENRICHED WHY CHOOSE POPUP MODAL (image copy 26.png) */}
       {whyPopup && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
           onClick={() => setWhyPopup(null)}
         >
           <div
-            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-[fadeIn_0.2s_ease-out]"
+            className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-orange-50 text-[#FF7A00] flex items-center justify-center">
-                  <whyPopup.icon className="w-6 h-6" />
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-13 h-13 rounded-2xl bg-orange-50 text-[#FF7A00] flex items-center justify-center shrink-0">
+                  <whyPopup.icon className="w-7 h-7" />
                 </div>
-                <h3 className="font-display font-extrabold text-xl text-[#002B7A]">{whyPopup.label}</h3>
+                <div>
+                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-blue-50 text-[#0052CC] text-[11px] font-bold mb-1">
+                    {whyPopup.badge}
+                  </span>
+                  <h3 className="font-display font-extrabold text-xl sm:text-2xl text-[#002B7A]">
+                    {whyPopup.label}
+                  </h3>
+                </div>
               </div>
               <button
                 onClick={() => setWhyPopup(null)}
@@ -484,27 +566,43 @@ export function HomePage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
             <p className="text-sm text-slate-600 leading-relaxed">{whyPopup.summary}</p>
-            <ul className="mt-4 space-y-2">
-              {whyPopup.highlights.map((h) => (
-                <li key={h} className="flex items-center gap-2 text-xs font-semibold text-slate-800">
-                  <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                  <span>{h}</span>
-                </li>
+
+            {/* 3 Highlight Metrics */}
+            <div className="grid grid-cols-3 gap-2.5 my-4 p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
+              {whyPopup.metrics.map((m) => (
+                <div key={m.label}>
+                  <p className="text-[11px] text-slate-400 font-medium">{m.label}</p>
+                  <p className="font-display font-bold text-sm text-[#00338D] mt-0.5">{m.value}</p>
+                </div>
               ))}
-            </ul>
+            </div>
+
+            <div className="space-y-2.5">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Key Student Advantages
+              </p>
+              {whyPopup.highlights.map((h) => (
+                <div key={h} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-700">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                  <span>{h}</span>
+                </div>
+              ))}
+            </div>
+
             <div className="mt-6 flex gap-2.5">
               <Link
                 to={whyPopup.ctaTo}
                 onClick={() => setWhyPopup(null)}
-                className="flex-1 py-3 rounded-xl bg-[#0052CC] hover:bg-[#003EB3] text-white text-center text-xs font-bold"
+                className="flex-1 py-3 rounded-xl bg-[#0052CC] hover:bg-[#003EB3] text-white text-center text-xs sm:text-sm font-bold shadow-md"
               >
                 {whyPopup.ctaLabel} →
               </Link>
               <button
                 type="button"
                 onClick={() => setWhyPopup(null)}
-                className="px-4 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 cursor-pointer"
+                className="px-4 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 cursor-pointer hover:bg-slate-50"
               >
                 Close
               </button>
@@ -513,14 +611,14 @@ export function HomePage() {
         </div>
       )}
 
-      {/* SUBSCRIPTION PLAN PREVIEW POPUP */}
+      {/* ENRICHED SUBSCRIPTION PLAN PREVIEW POPUP */}
       {planPopup && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
           onClick={() => setPlanPopup(null)}
         >
           <div
-            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200"
+            className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-3">
@@ -535,25 +633,60 @@ export function HomePage() {
               </button>
             </div>
             <h3 className="font-display font-extrabold text-2xl text-[#002B7A]">{planPopup.name}</h3>
-            <p className="font-display font-extrabold text-3xl text-[#FF7A00] mt-2">
-              {formatCurrency(planPopup.price)}{' '}
-              <span className="text-sm font-semibold text-slate-500">/ {planPopup.duration_months} Months</span>
-            </p>
-            <ul className="mt-4 space-y-2.5 border-t border-slate-100 pt-4">
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="font-display font-extrabold text-3xl text-[#FF7A00]">
+                {formatCurrency(planPopup.price)}
+              </span>
+              <span className="text-sm font-semibold text-slate-500">
+                / {planPopup.duration_months} Months ({formatCurrency(Math.round(planPopup.price / planPopup.duration_months))}/mo)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2.5 my-4 p-3.5 rounded-2xl bg-blue-50/60 border border-blue-100 text-center text-xs">
+              <div>
+                <p className="text-slate-500">Validity</p>
+                <p className="font-bold text-[#00338D]">{planPopup.duration_months} Months</p>
+              </div>
+              <div>
+                <p className="text-slate-500">Certificate</p>
+                <p className="font-bold text-emerald-600">Included</p>
+              </div>
+              <div>
+                <p className="text-slate-500">Activation</p>
+                <p className="font-bold text-[#FF7A00]">Instant</p>
+              </div>
+            </div>
+
+            <div className="space-y-2.5 border-t border-slate-100 pt-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Everything Included</p>
               {planPopup.features.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-xs sm:text-sm text-slate-700">
-                  <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <div key={f} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-700">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                   <span>{f}</span>
-                </li>
+                </div>
               ))}
-            </ul>
-            <Link
-              to="/plans"
-              onClick={() => setPlanPopup(null)}
-              className="mt-6 block w-full py-3 rounded-xl bg-[#FF7A00] hover:bg-[#E66D00] text-white text-center text-sm font-bold shadow-md"
-            >
-              Proceed to Subscribe →
-            </Link>
+              <div className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-700">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <span>Full access on desktop web & mobile app with live progress sync</span>
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-2.5">
+              <Link
+                to="/plans"
+                onClick={() => setPlanPopup(null)}
+                className="flex-1 py-3 rounded-xl bg-[#FF7A00] hover:bg-[#E66D00] text-white text-center text-sm font-bold shadow-md"
+              >
+                Proceed to Subscribe →
+              </Link>
+              <button
+                type="button"
+                onClick={() => setPlanPopup(null)}
+                className="px-4 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -287,6 +287,12 @@ export function initDatabase(): void {
   const userCount = (db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c;
   if (userCount === 0) {
     seedDatabase();
+  } else {
+    // Upgrade legacy .svg thumbnails to new .png artwork if unchanged
+    db.exec(`
+      UPDATE courses SET thumbnail_url = REPLACE(thumbnail_url, '.svg', '.png') WHERE thumbnail_url LIKE '/images/courses/%.svg';
+      UPDATE cms_settings SET value_json = REPLACE(value_json, '/images/about-campus.svg', '/images/about-hero-banner.png') WHERE key = 'about';
+    `);
   }
 }
 
@@ -444,7 +450,7 @@ function seedDatabase(): void {
         'Learn English from basic to advanced levels. Improve grammar, vocabulary, pronunciation, fluency and communication skills.',
       description:
         'Master real-world spoken English with daily guided speaking drills, Indian accent neutralization, practical grammar, rich vocabulary building, and interactive live conversation clubs designed for students, job seekers, and working professionals.',
-      thumbnail_url: '/images/courses/spoken-english.svg',
+      thumbnail_url: '/images/courses/spoken-english.png',
       icon_name: 'MessageSquare',
       icon_color: 'orange',
       level: 'Beginner to Advanced',
@@ -495,7 +501,7 @@ function seedDatabase(): void {
         'Complete preparation for various competitive examinations through structured lessons, practice tests and expert guidance.',
       description:
         'All-in-one structured preparation for SSC CGL, CHSL, Banking (IBPS/SBI), Railways (RRB), and State PSC exams. Covers Quantitative Aptitude, General Awareness, Reasoning, and English with full-length timed mock tests.',
-      thumbnail_url: '/images/courses/competitive-exams.svg',
+      thumbnail_url: '/images/courses/competitive-exams.png',
       icon_name: 'Trophy',
       icon_color: 'orange',
       level: 'Intermediate to Pro',
@@ -538,7 +544,7 @@ function seedDatabase(): void {
         'Concept-based learning, subject preparation, practice questions and examination guidance for aspiring engineering and medical students.',
       description:
         'Build rock-solid conceptual clarity in Physics, Chemistry, Mathematics, and Biology from NCERT fundamentals up to JEE Main/Advanced and NEET UG rank-deciding problems with structured DPPs and doubt support.',
-      thumbnail_url: '/images/courses/jee-neet.svg',
+      thumbnail_url: '/images/courses/jee-neet.png',
       icon_name: 'GraduationCap',
       icon_color: 'blue',
       level: 'Class 11, 12 & Droppers',
@@ -581,7 +587,7 @@ function seedDatabase(): void {
         'Learn general studies, English, communication, vocabulary and essential skills for civil services examination preparation.',
       description:
         'Comprehensive UPSC Civil Services (IAS/IPS) foundation covering Indian Polity, Modern History, Geography, Economy, Ethics, CSAT, Newspaper Editorial Analysis, and Mains Answer Writing along with interview communication.',
-      thumbnail_url: '/images/courses/upsc.svg',
+      thumbnail_url: '/images/courses/upsc.png',
       icon_name: 'Landmark',
       icon_color: 'orange',
       level: 'Foundation to Mains',
@@ -624,7 +630,7 @@ function seedDatabase(): void {
         'Develop logical thinking, quantitative aptitude, analytical skills and problem-solving abilities for competitive exams and placement tests.',
       description:
         'Crack campus placements (TCS, Infosys, Wipro, Accenture, Amazon) and competitive aptitude rounds with crystal-clear logical reasoning, puzzles, permutations, probability, and data sufficiency techniques.',
-      thumbnail_url: '/images/courses/aptitude-reasoning.svg',
+      thumbnail_url: '/images/courses/aptitude-reasoning.png',
       icon_name: 'Brain',
       icon_color: 'orange',
       level: 'All Levels',
@@ -667,7 +673,7 @@ function seedDatabase(): void {
         'Prepare for IT and private-sector job interviews with mock interviews, HR questions, self-introduction and communication training.',
       description:
         'Walk into any technical or HR interview with unshakeable confidence. Includes ATS-friendly resume building, STAR method behavioral answers, common HR traps, live mock interviews, and salary negotiation coaching.',
-      thumbnail_url: '/images/courses/interview-prep.svg',
+      thumbnail_url: '/images/courses/interview-prep.png',
       icon_name: 'Users',
       icon_color: 'orange',
       level: 'Freshers & Experienced',
@@ -710,7 +716,7 @@ function seedDatabase(): void {
         'Learn programming languages and technical skills, including Python, Java and other essential software technologies.',
       description:
         'Go from zero coding experience to building production applications with Python, Core & Object-Oriented Java, SQL Databases, Git, Data Structures, and Full-Stack Web fundamentals taught by Hyderabad software engineers.',
-      thumbnail_url: '/images/courses/it-programming.svg',
+      thumbnail_url: '/images/courses/it-programming.png',
       icon_name: 'Code2',
       icon_color: 'orange',
       level: 'Beginner to Job-Ready',
@@ -753,7 +759,7 @@ function seedDatabase(): void {
         'Improve workplace communication, presentation skills, confidence and professional abilities.',
       description:
         'Accelerate your career growth with executive communication, persuasive business presentations, email etiquette, emotional intelligence, leadership habits, and productivity systems.',
-      thumbnail_url: '/images/courses/career-development.svg',
+      thumbnail_url: '/images/courses/career-development.png',
       icon_name: 'TrendingUp',
       icon_color: 'orange',
       level: 'Students & Professionals',
@@ -1273,7 +1279,7 @@ function seedDatabase(): void {
         'Transparency and Trust',
         'Continuous Improvement',
       ],
-      imageUrl: '/images/about-campus.svg',
+      imageUrl: '/images/about-hero-banner.png',
     },
     contact: {
       phone: '8978991329',

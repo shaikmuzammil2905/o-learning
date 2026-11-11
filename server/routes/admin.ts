@@ -265,7 +265,7 @@ router.post('/courses', (req, res) => {
     category_id,
     short_description,
     description,
-    thumbnail_url = '/images/courses/it-programming.svg',
+    thumbnail_url = '/images/courses/it-programming.png',
     level = 'Beginner to Advanced',
     duration = '12 Weeks',
     price = 1999,

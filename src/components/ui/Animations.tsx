@@ -117,3 +117,4 @@ export function AnimatedCounter({ value }: { value: string }) {
     </span>
   );
 }
+

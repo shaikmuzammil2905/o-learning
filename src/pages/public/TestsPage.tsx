@@ -1,26 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Award, CheckCircle2, Clock, FileQuestion, Info, PlayCircle, X } from 'lucide-react';
+import { Award, CheckCircle2, Clock, FileQuestion, Info, PlayCircle, ShieldCheck, Trophy, X } from 'lucide-react';
 import { PublicLayout } from '../../components/PublicLayout';
-import { EmptyState, LoadingState } from '../../components/ui/StateViews';
+import { EmptyState } from '../../components/ui/StateViews';
 import { RevealOnScroll } from '../../components/ui/Animations';
 import { useAuth } from '../../context/AuthContext';
-import { api } from '../../lib/api';
+import { useSite } from '../../context/SiteContext';
 import type { TestItem } from '../../types';
 
 export function TestsPage() {
-  const [tests, setTests] = useState<TestItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { tests } = useSite();
   const [previewTest, setPreviewTest] = useState<TestItem | null>(null);
   const { user } = useAuth();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    api<TestItem[]>('/api/public/tests')
-      .then(setTests)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
 
   const handleStartTest = (testId: number) => {
     if (!user) {
@@ -46,9 +38,7 @@ export function TestsPage() {
       </section>
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-9">
-        {loading ? (
-          <LoadingState message="Loading available tests…" />
-        ) : tests.length === 0 ? (
+        {tests.length === 0 ? (
           <EmptyState title="No tests available right now." description="Check back soon for new mock exams." />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -113,20 +103,25 @@ export function TestsPage() {
         )}
       </section>
 
-      {/* Interactive Test Rules & Preview Popup */}
+      {/* Enriched Interactive Test Rules & Preview Popup */}
       {previewTest && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
           onClick={() => setPreviewTest(null)}
         >
           <div
-            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200"
+            className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="px-3 py-1 rounded-full bg-blue-50 text-[#0052CC] text-xs font-bold">
-                {previewTest.course_title || 'Mock Assessment'}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full bg-blue-50 text-[#0052CC] text-xs font-bold">
+                  {previewTest.course_title || 'Mock Assessment'}
+                </span>
+                <span className="px-2.5 py-1 rounded-full bg-orange-50 text-[#FF7A00] text-xs font-bold">
+                  {previewTest.difficulty} Level
+                </span>
+              </div>
               <button
                 onClick={() => setPreviewTest(null)}
                 className="p-1.5 rounded-full hover:bg-slate-100 cursor-pointer"
@@ -134,46 +129,66 @@ export function TestsPage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <h3 className="font-display font-extrabold text-xl text-[#002B7A]">{previewTest.title}</h3>
-            <p className="text-xs sm:text-sm text-slate-600 mt-2">{previewTest.description}</p>
+            <h3 className="font-display font-extrabold text-2xl text-[#002B7A]">{previewTest.title}</h3>
+            <p className="text-xs sm:text-sm text-slate-600 mt-2 leading-relaxed">{previewTest.description}</p>
 
-            <div className="grid grid-cols-3 gap-2.5 my-4 p-3.5 rounded-2xl bg-slate-50 text-center text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 my-4 p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-center text-xs">
               <div>
                 <p className="text-slate-400">Questions</p>
-                <p className="font-bold text-slate-900 text-sm">{previewTest.questions_count || 5}</p>
+                <p className="font-bold text-slate-900 text-sm">{previewTest.questions_count || 5} MCQs</p>
               </div>
               <div>
                 <p className="text-slate-400">Duration</p>
-                <p className="font-bold text-slate-900 text-sm">{previewTest.duration_minutes}m</p>
+                <p className="font-bold text-slate-900 text-sm">{previewTest.duration_minutes} mins</p>
               </div>
               <div>
-                <p className="text-slate-400">Pass Marks</p>
+                <p className="text-slate-400">Pass Cut-off</p>
                 <p className="font-bold text-emerald-600 text-sm">{previewTest.pass_marks}/{previewTest.total_marks}</p>
+              </div>
+              <div>
+                <p className="text-slate-400">Negative</p>
+                <p className="font-bold text-red-600 text-sm">
+                  {previewTest.negative_marks > 0 ? `-${previewTest.negative_marks}` : 'None'}
+                </p>
               </div>
             </div>
 
-            <ul className="space-y-2 text-xs text-slate-700 mb-5">
-              <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                Live countdown timer with automatic submission at 00:00
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                Negative marking: {previewTest.negative_marks > 0 ? `-${previewTest.negative_marks} per wrong answer` : 'None'}
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                Instant scorecard, rank & detailed answer explanations
-              </li>
-            </ul>
+            <div className="space-y-2.5 mb-5">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Exam Guidelines & Analytics</p>
+              {[
+                'Real-time countdown clock with automatic submission when time expires.',
+                'Interactive question palette lets you jump between answered & unanswered items.',
+                'Instant accuracy percentage, peer rank calculation, and full solution explanations.',
+                'Multiple attempts permitted so you can track improvement over time.',
+              ].map((g) => (
+                <div key={g} className="flex items-start gap-2 text-xs sm:text-sm text-slate-700">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                  <span>{g}</span>
+                </div>
+              ))}
+            </div>
 
-            <button
-              type="button"
-              onClick={() => handleStartTest(previewTest.id)}
-              className="w-full py-3 rounded-xl bg-[#FF7A00] hover:bg-[#E66D00] text-white font-bold text-sm cursor-pointer shadow-md"
-            >
-              Start This Test Now →
-            </button>
+            <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-100 flex items-center gap-3 text-xs text-[#00338D] mb-5">
+              <Trophy className="w-5 h-5 text-[#FF7A00] shrink-0" />
+              <span>Score {previewTest.pass_marks}+ marks to pass and boost your Student Leaderboard rank.</span>
+            </div>
+
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => handleStartTest(previewTest.id)}
+                className="flex-1 py-3 rounded-xl bg-[#FF7A00] hover:bg-[#E66D00] text-white font-bold text-sm cursor-pointer shadow-md inline-flex items-center justify-center gap-2"
+              >
+                <ShieldCheck className="w-4 h-4" /> Start This Test Now →
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewTest(null)}
+                className="px-4 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
