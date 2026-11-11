@@ -35,7 +35,8 @@ const ADMIN_LINKS: SidebarLink[] = [
   { to: '/admin/batches', label: 'Batches & Live', icon: Calendar },
   { to: '/admin/tests', label: 'Tests & Questions', icon: ClipboardCheck },
   { to: '/admin/payments', label: 'Payments & Plans', icon: CreditCard },
-  { to: '/admin/certificates', label: 'Referrals & Certs', icon: Award },
+  { to: '/admin/referrals', label: 'Referral Management', icon: Gift },
+  { to: '/admin/certificates', label: 'Certificates', icon: Award },
   { to: '/admin/cms', label: 'Website CMS & Inbox', icon: Globe },
 ];
 
@@ -64,7 +65,12 @@ export function AdminPortal({ section = 'overview' }: { section?: string }) {
   const [tests, setTests] = useState<Array<Record<string, any>>>([]);
   const [payments, setPayments] = useState<Array<Record<string, any>>>([]);
   const [plans, setPlans] = useState<Array<Record<string, any>>>([]);
-  const [referrals, setReferrals] = useState<Array<Record<string, any>>>([]);
+  const [referrals, setReferrals] = useState<{
+    signupReferrals: Array<Record<string, any>>;
+    courseReferrals: Array<Record<string, any>>;
+    eventSummary: Array<{ event_type: string; count: number }>;
+    attributions: Array<Record<string, any>>;
+  }>({ signupReferrals: [], courseReferrals: [], eventSummary: [], attributions: [] });
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [enquiries, setEnquiries] = useState<Array<Record<string, any>>>([]);
 
@@ -202,9 +208,9 @@ export function AdminPortal({ section = 'overview' }: { section?: string }) {
         ]);
         setPayments(p);
         setPlans(pl);
-      } else if (section === 'certificates') {
+      } else if (section === 'certificates' || section === 'referrals') {
         const [r, certs] = await Promise.all([
-          api<any[]>('/api/admin/referrals'),
+          api<typeof referrals>('/api/admin/referrals'),
           api<Certificate[]>('/api/admin/certificates'),
         ]);
         setReferrals(r);
@@ -1129,7 +1135,145 @@ export function AdminPortal({ section = 'overview' }: { section?: string }) {
             </div>
           )}
 
-          {/* ==================== 8. REFERRALS & CERTIFICATES ==================== */}
+          {/* ==================== 8. REFERRAL MANAGEMENT ==================== */}
+          {section === 'referrals' && (
+            <div className="space-y-6">
+              {/* Event Tracking Summary */}
+              {referrals.eventSummary.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {referrals.eventSummary.map((ev) => (
+                    <div key={ev.event_type} className="bg-white rounded-2xl p-4 border border-slate-200">
+                      <p className="text-[11px] font-bold uppercase text-slate-400">
+                        {ev.event_type.replace(/_/g, ' ')}
+                      </p>
+                      <p className="font-display font-extrabold text-2xl text-[#0052CC] mt-1">
+                        {ev.count}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Course Referral Links Table */}
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+                <div className="p-5 border-b border-slate-200 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Gift className="w-5 h-5 text-[#FF7A00]" />
+                    <h2 className="font-display font-bold text-base text-[#002B7A]">
+                      Referral Management ({referrals.courseReferrals.length})
+                    </h2>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs sm:text-sm">
+                    <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+                      <tr>
+                        <th className="px-4 py-3">Course</th>
+                        <th className="px-4 py-3">Referral Code</th>
+                        <th className="px-4 py-3">Referrer</th>
+                        <th className="px-4 py-3">Referral Link</th>
+                        <th className="px-4 py-3">Clicks</th>
+                        <th className="px-4 py-3">Enrollments</th>
+                        <th className="px-4 py-3">Conv. Rate</th>
+                        <th className="px-4 py-3">Created</th>
+                        <th className="px-4 py-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {referrals.courseReferrals.map((r) => {
+                        const fullUrl = `${window.location.origin}/courses/${r.course_slug}?ref=${r.referral_code}`;
+                        return (
+                          <tr key={r.id}>
+                            <td className="px-4 py-3.5 font-bold text-slate-900">{r.course_title}</td>
+                            <td className="px-4 py-3.5 font-mono font-bold text-[#0052CC]">{r.referral_code}</td>
+                            <td className="px-4 py-3.5 text-slate-700">{r.referrer_name}</td>
+                            <td className="px-4 py-3.5">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await navigator.clipboard.writeText(fullUrl);
+                                  notify(`Copied link for ${r.referral_code}`);
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#0052CC] text-xs font-bold cursor-pointer"
+                              >
+                                Copy Link
+                              </button>
+                            </td>
+                            <td className="px-4 py-3.5 font-bold text-slate-900">{r.clicks}</td>
+                            <td className="px-4 py-3.5 font-bold text-emerald-600">{r.enrollments_count}</td>
+                            <td className="px-4 py-3.5 font-bold text-[#FF7A00]">{r.conversion_rate}%</td>
+                            <td className="px-4 py-3.5 text-xs text-slate-500">{formatDateTime(r.created_at)}</td>
+                            <td className="px-4 py-3.5">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await api(`/api/admin/referrals/${r.id}/status`, {
+                                    method: 'PATCH',
+                                    body: JSON.stringify({ status: r.status === 'active' ? 'paused' : 'active' }),
+                                  });
+                                  loadSection();
+                                }}
+                                className={`px-2.5 py-1 rounded-full text-[11px] font-bold uppercase cursor-pointer ${
+                                  r.status === 'active'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : 'bg-slate-100 text-slate-500'
+                                }`}
+                              >
+                                {r.status}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Referred Course Enrollments Attribution */}
+              {referrals.attributions.length > 0 && (
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                  <div className="p-5 border-b border-slate-200">
+                    <h3 className="font-display font-bold text-base text-[#002B7A]">
+                      Course Enrollment Attributions ({referrals.attributions.length})
+                    </h3>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {referrals.attributions.map((a) => (
+                      <div key={a.id} className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <span>
+                          <strong>{a.referred_student_name}</strong> enrolled in <strong>{a.course_title}</strong> via{' '}
+                          <span className="font-mono text-[#0052CC] font-bold">{a.referral_code}</span> ({a.referrer_name})
+                        </span>
+                        <span className="text-slate-500">{formatDateTime(a.created_at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Signup Referrals */}
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="p-5 border-b border-slate-200">
+                  <h3 className="font-display font-bold text-base text-[#002B7A]">
+                    User Signup Referrals ({referrals.signupReferrals.length})
+                  </h3>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {referrals.signupReferrals.map((r) => (
+                    <div key={r.id} className="px-5 py-3.5 flex items-center justify-between text-xs">
+                      <span>
+                        <strong>{r.referrer_name}</strong> referred <strong>{r.referred_name}</strong> ({r.referral_code})
+                      </span>
+                      <span className="font-bold text-emerald-600">{formatCurrency(r.reward_amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ==================== 8B. CERTIFICATES ==================== */}
           {section === 'certificates' && (
             <div className="space-y-6">
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -1181,25 +1325,6 @@ export function AdminPortal({ section = 'overview' }: { section?: string }) {
               </div>
 
               {previewCert && <CertificateView certificate={previewCert} onClose={() => setPreviewCert(null)} />}
-
-              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                <div className="p-5 border-b border-slate-200 flex items-center gap-2">
-                  <Gift className="w-5 h-5 text-[#FF7A00]" />
-                  <h2 className="font-display font-bold text-base text-[#002B7A]">
-                    Referral Tracking ({referrals.length})
-                  </h2>
-                </div>
-                <div className="divide-y divide-slate-100">
-                  {referrals.map((r) => (
-                    <div key={r.id} className="px-5 py-3.5 flex items-center justify-between text-xs">
-                      <span>
-                        <strong>{r.referrer_name}</strong> referred <strong>{r.referred_name}</strong> ({r.referral_code})
-                      </span>
-                      <span className="font-bold text-emerald-600">{formatCurrency(r.reward_amount)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
 

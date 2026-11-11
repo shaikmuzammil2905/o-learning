@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Clock, Layers, Star } from 'lucide-react';
 import type { Course } from '../types';
 import { formatCurrency } from '../lib/api';
+import { CourseShareButton } from './CourseShareButton';
 
 export function CourseCard({ course }: { course: Course }) {
   const effectivePrice = course.discount_price ?? course.price;
@@ -67,7 +68,7 @@ export function CourseCard({ course }: { course: Course }) {
           </span>
         </div>
 
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4 flex items-center justify-between gap-2">
           <div className="flex items-baseline gap-2">
             <span className="font-display font-extrabold text-lg text-[#00338D]">
               {course.is_free === 1 ? 'Free' : formatCurrency(effectivePrice)}
@@ -78,9 +79,12 @@ export function CourseCard({ course }: { course: Course }) {
               </span>
             )}
           </div>
-          <span className="inline-flex items-center gap-1 text-xs font-bold text-[#FF7A00] group-hover:translate-x-0.5 transition-transform">
-            View Details <ArrowRight className="w-3.5 h-3.5" />
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <CourseShareButton course={course} variant="card" />
+            <span className="inline-flex items-center gap-1 text-xs font-bold text-[#FF7A00] group-hover:translate-x-0.5 transition-transform">
+              Enroll <ArrowRight className="w-3.5 h-3.5" />
+            </span>
+          </div>
         </div>
       </div>
     </Link>

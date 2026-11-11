@@ -97,6 +97,7 @@ export default function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/courses" element={<CoursesPage />} />
             <Route path="/courses/:courseId" element={<CourseDetailPage />} />
+            <Route path="/course/:courseId" element={<CourseDetailPage />} />
             <Route path="/tests" element={<TestsPage />} />
             <Route path="/batches" element={<BatchesPage />} />
             <Route path="/about" element={<AboutPage />} />
@@ -284,6 +285,14 @@ export default function App() {
               element={
                 <RequireRole roles={['admin']}>
                   <AdminPortal section="certificates" />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/referrals"
+              element={
+                <RequireRole roles={['admin']}>
+                  <AdminPortal section="referrals" />
                 </RequireRole>
               }
             />

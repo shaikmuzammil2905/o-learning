@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Award,
   BookOpen,
@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock,
   FileText,
+  Gift,
   HelpCircle,
   Layers,
   Lock,
@@ -16,18 +17,31 @@ import {
 } from 'lucide-react';
 import { PublicLayout } from '../../components/PublicLayout';
 import { PaymentModal } from '../../components/PaymentModal';
+import { CourseShareButton } from '../../components/CourseShareButton';
 import { ErrorState, LoadingState } from '../../components/ui/StateViews';
 import { useAuth } from '../../context/AuthContext';
+import { useSite } from '../../context/SiteContext';
 import { api, formatCurrency } from '../../lib/api';
+import {
+  clearStoredReferralCode,
+  getStoredReferralCode,
+  saveReferralAttribution,
+  trackReferralEvent,
+} from '../../lib/referral';
 import type { Course } from '../../types';
 
 export function CourseDetailPage() {
   const { courseId } = useParams();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const { courses: cachedCourses } = useSite();
   const navigate = useNavigate();
 
-  const [course, setCourse] = useState<Course | null>(null);
-  const [loading, setLoading] = useState(true);
+  const initialCourse =
+    cachedCourses.find((c) => c.slug === courseId || String(c.id) === courseId) || null;
+
+  const [course, setCourse] = useState<Course | null>(initialCourse);
+  const [loading, setLoading] = useState(!initialCourse);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<'overview' | 'curriculum' | 'faculty' | 'reviews' | 'faqs'>('overview');
   const [payOpen, setPayOpen] = useState(false);
@@ -35,24 +49,55 @@ export function CourseDetailPage() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewStatus, setReviewStatus] = useState('');
+  const [activeRefCode, setActiveRefCode] = useState<string | null>(() => getStoredReferralCode());
 
   const loadCourse = () => {
-    setLoading(true);
+    if (!course) setLoading(true);
     setError('');
     api<Course>(`/api/public/courses/${courseId}`)
       .then((data) => setCourse(data))
-      .catch((err) => setError(err instanceof Error ? err.message : 'Unable to load course'))
+      .catch((err) => {
+        if (!course) {
+          setError(err instanceof Error ? err.message : 'Unable to load course');
+        }
+      })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
+    const matched = cachedCourses.find((c) => c.slug === courseId || String(c.id) === courseId) || null;
+    if (matched) setCourse(matched);
     loadCourse();
   }, [courseId]);
 
+  // Capture & persist ?ref= query parameter + log referral_visit
+  useEffect(() => {
+    const refParam = searchParams.get('ref');
+    if (refParam && course) {
+      const cleanRef = refParam.trim().toUpperCase();
+      saveReferralAttribution(course.slug, cleanRef);
+      setActiveRefCode(cleanRef);
+
+      const visitKey = `olearn_visited_${course.id}_${cleanRef}`;
+      try {
+        if (!sessionStorage.getItem(visitKey)) {
+          sessionStorage.setItem(visitKey, '1');
+          trackReferralEvent(course.id, cleanRef, 'referral_visit');
+        }
+      } catch {
+        trackReferralEvent(course.id, cleanRef, 'referral_visit');
+      }
+    } else if (course) {
+      setActiveRefCode(getStoredReferralCode(course.slug));
+    }
+  }, [searchParams, course?.id, course?.slug]);
+
   const handleEnrollClick = async () => {
     if (!course) return;
+    const refCodeToSend = activeRefCode || getStoredReferralCode(course.slug);
     if (!user) {
-      navigate(`/login?redirect=/courses/${course.slug}`);
+      const target = `/courses/${course.slug}${refCodeToSend ? `?ref=${encodeURIComponent(refCodeToSend)}` : ''}`;
+      navigate(`/login?redirect=${encodeURIComponent(target)}`);
       return;
     }
     if (course.is_enrolled) {
@@ -66,8 +111,9 @@ export function CourseDetailPage() {
       try {
         await api('/api/student/enroll/free', {
           method: 'POST',
-          body: JSON.stringify({ course_id: course.id }),
+          body: JSON.stringify({ course_id: course.id, referral_code: refCodeToSend }),
         });
+        if (refCodeToSend) clearStoredReferralCode();
         navigate(`/student/learn/${course.slug}`);
       } catch (err) {
         alert(err instanceof Error ? err.message : 'Could not enroll');
@@ -77,7 +123,6 @@ export function CourseDetailPage() {
       return;
     }
 
-    // Paid course -> try subscription-free enroll? Only if user specifically pays or has active sub
     setPayOpen(true);
   };
 
@@ -199,22 +244,32 @@ export function CourseDetailPage() {
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={enrollingFree}
-                    onClick={handleEnrollClick}
-                    className="mt-4 w-full py-3.5 rounded-xl bg-[#FF7A00] hover:bg-[#E66D00] text-white font-bold text-sm shadow-lg shadow-orange-500/25 transition cursor-pointer disabled:opacity-60"
-                  >
-                    {enrollingFree
-                      ? 'Enrolling…'
-                      : course.is_enrolled
-                      ? 'Continue Learning →'
-                      : course.is_free === 1
-                      ? 'Enroll for Free →'
-                      : 'Enroll Now →'}
-                  </button>
+                  {activeRefCode && (
+                    <div className="mt-3 px-3 py-2 rounded-xl bg-orange-50 border border-orange-200 text-xs font-bold text-[#E66D00] flex items-center gap-2">
+                      <Gift className="w-4 h-4 shrink-0" />
+                      <span>Referred via code {activeRefCode}</span>
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex flex-col sm:flex-row gap-2.5">
+                    <button
+                      type="button"
+                      disabled={enrollingFree}
+                      onClick={handleEnrollClick}
+                      className="flex-1 py-3.5 px-5 rounded-xl bg-[#FF7A00] hover:bg-[#E66D00] text-white font-bold text-sm shadow-lg shadow-orange-500/25 transition cursor-pointer disabled:opacity-60"
+                    >
+                      {enrollingFree
+                        ? 'Enrolling…'
+                        : course.is_enrolled
+                        ? 'Continue Learning →'
+                        : course.is_free === 1
+                        ? 'Enroll for Free →'
+                        : 'Enroll Now →'}
+                    </button>
+                    <CourseShareButton course={course} variant="detail" />
+                  </div>
                   <p className="text-[11px] text-slate-500 text-center mt-2.5">
-                    Includes live doubt sessions, study materials & official certificate
+                    Includes live doubt sessions, study materials &amp; official certificate
                   </p>
                 </div>
               </div>
@@ -466,6 +521,7 @@ export function CourseDetailPage() {
         amount={course.price}
         discountAmount={discountAmount}
         finalAmount={effectivePrice}
+        referralCode={activeRefCode}
         onSuccess={() => {
           navigate(`/student/learn/${course.slug}`);
         }}

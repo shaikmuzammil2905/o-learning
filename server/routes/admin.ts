@@ -715,16 +715,71 @@ router.get('/enrollments', (_req, res) => {
 
 // 11. Referrals & Certificates Management
 router.get('/referrals', (_req, res) => {
-  const list = db
+  const signupReferrals = db
     .prepare(`
-      SELECT r.*, u1.full_name as referrer_name, u2.full_name as referred_name
+      SELECT r.id, r.referral_code, r.status, r.reward_amount, r.created_at,
+             u1.full_name as referrer_name, u2.full_name as referred_name
       FROM referrals r
       JOIN users u1 ON u1.id = r.referrer_id
       JOIN users u2 ON u2.id = r.referred_user_id
       ORDER BY r.created_at DESC
     `)
     .all();
-  res.json(list);
+
+  const courseReferrals = db
+    .prepare(`
+      SELECT crl.id, crl.course_id, crl.referral_code, crl.clicks, crl.enrollments_count,
+             crl.status, crl.created_at,
+             c.title as course_title, c.slug as course_slug,
+             COALESCE(u.full_name, 'Guest / Public Share') as referrer_name
+      FROM course_referral_links crl
+      JOIN courses c ON c.id = crl.course_id
+      LEFT JOIN users u ON u.id = crl.referrer_id
+      ORDER BY crl.clicks DESC, crl.created_at DESC
+    `)
+    .all() as Array<{ clicks: number; enrollments_count: number; [k: string]: unknown }>;
+
+  const courseReferralsWithRates = courseReferrals.map((r) => ({
+    ...r,
+    conversion_rate:
+      Number(r.clicks) > 0 ? Math.min(100, Math.round((Number(r.enrollments_count) / Number(r.clicks)) * 100)) : 0,
+  }));
+
+  const eventSummary = db
+    .prepare('SELECT event_type, COUNT(*) as count FROM referral_events GROUP BY event_type')
+    .all();
+
+  const attributions = db
+    .prepare(`
+      SELECT cra.id, cra.referral_code, cra.created_at, c.title as course_title,
+             COALESCE(u1.full_name, 'Guest / Direct') as referrer_name,
+             u2.full_name as referred_student_name
+      FROM course_referral_attributions cra
+      JOIN courses c ON c.id = cra.course_id
+      LEFT JOIN users u1 ON u1.id = cra.referrer_id
+      JOIN users u2 ON u2.id = cra.referred_user_id
+      ORDER BY cra.created_at DESC
+      LIMIT 30
+    `)
+    .all();
+
+  res.json({
+    signupReferrals,
+    courseReferrals: courseReferralsWithRates,
+    eventSummary,
+    attributions,
+  });
+});
+
+router.patch('/referrals/:id/status', (req, res) => {
+  const id = Number(req.params.id);
+  const { status } = req.body || {};
+  if (!['active', 'paused'].includes(status)) {
+    res.status(400).json({ error: 'Invalid status.' });
+    return;
+  }
+  db.prepare('UPDATE course_referral_links SET status = ? WHERE id = ?').run(status, id);
+  res.json({ ok: true });
 });
 
 router.get('/certificates', (_req, res) => {

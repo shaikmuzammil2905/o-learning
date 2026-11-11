@@ -282,6 +282,48 @@ export function initDatabase(): void {
       is_read INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS course_referral_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+      referrer_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      referral_code TEXT NOT NULL UNIQUE,
+      clicks INTEGER NOT NULL DEFAULT 0,
+      enrollments_count INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL CHECK (status IN ('active', 'paused')) DEFAULT 'active',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS referral_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+      referral_code TEXT NOT NULL,
+      event_type TEXT NOT NULL CHECK (
+        event_type IN (
+          'share_clicked',
+          'referral_link_generated',
+          'referral_link_copied',
+          'whatsapp_share',
+          'instagram_share',
+          'native_share',
+          'referral_visit',
+          'course_enrollment'
+        )
+      ),
+      actor_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS course_referral_attributions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+      referral_code TEXT NOT NULL,
+      referrer_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      referred_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      payment_id INTEGER REFERENCES payments(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(course_id, referred_user_id)
+    );
   `);
 
   const userCount = (db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c;
@@ -293,6 +335,17 @@ export function initDatabase(): void {
       UPDATE courses SET thumbnail_url = REPLACE(thumbnail_url, '.svg', '.png') WHERE thumbnail_url LIKE '/images/courses/%.svg';
       UPDATE cms_settings SET value_json = REPLACE(value_json, '/images/about-campus.svg', '/images/about-hero-banner.png') WHERE key = 'about';
     `);
+    const crCount = (db.prepare('SELECT COUNT(*) as c FROM course_referral_links').get() as { c: number }).c;
+    if (crCount === 0) {
+      const firstStudent = db.prepare("SELECT id FROM users WHERE role = 'student' ORDER BY id ASC LIMIT 1").get() as { id: number } | undefined;
+      const cSpk = db.prepare("SELECT id FROM courses WHERE slug = 'spoken-english'").get() as { id: number } | undefined;
+      const cInt = db.prepare("SELECT id FROM courses WHERE slug = 'interview-preparation'").get() as { id: number } | undefined;
+      const cItp = db.prepare("SELECT id FROM courses WHERE slug = 'it-and-programming-courses'").get() as { id: number } | undefined;
+      const ins = db.prepare('INSERT INTO course_referral_links (course_id, referrer_id, referral_code, clicks, enrollments_count, status) VALUES (?, ?, ?, ?, ?, ?)');
+      if (cSpk) ins.run(cSpk.id, firstStudent?.id ?? null, 'OL-1023SPK', 25, 4, 'active');
+      if (cInt) ins.run(cInt.id, firstStudent?.id ?? null, 'OL-8841INT', 42, 7, 'active');
+      if (cItp) ins.run(cItp.id, firstStudent?.id ?? null, 'OL-5521ITP', 18, 3, 'active');
+    }
   }
 }
 
@@ -1191,6 +1244,15 @@ function seedDatabase(): void {
     INSERT INTO referrals (referrer_id, referred_user_id, referral_code, status, reward_amount)
     VALUES (?, ?, 'OLR-AARAV26', 'successful', 250)
   `).run(s1, s2);
+
+  // Seed initial Course Referral Links for analytics
+  const insertCourseRef = db.prepare(`
+    INSERT INTO course_referral_links (course_id, referrer_id, referral_code, clicks, enrollments_count, status)
+    VALUES (?, ?, ?, ?, ?, 'active')
+  `);
+  insertCourseRef.run(courseIds['spoken-english'], s1, 'OL-1023SPK', 25, 4);
+  insertCourseRef.run(courseIds['interview-preparation'], s1, 'OL-8841INT', 42, 7);
+  insertCourseRef.run(courseIds['it-and-programming-courses'], s2, 'OL-5521ITP', 18, 3);
 
   // Sample Reviews
   const insertReview = db.prepare(

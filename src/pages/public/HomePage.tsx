@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { PublicLayout } from '../../components/PublicLayout';
+import { CourseShareButton } from '../../components/CourseShareButton';
 import { CourseIcon } from '../../components/ui/StateViews';
 import { AnimatedCounter, RevealOnScroll } from '../../components/ui/Animations';
 import { useSite } from '../../context/SiteContext';
@@ -350,13 +351,16 @@ export function HomePage() {
                       {course.short_description}
                     </p>
 
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
                       <span className="font-display font-extrabold text-sm text-[#00338D]">
                         {course.is_free === 1 ? 'Free' : formatCurrency(effectivePrice)}
                       </span>
-                      <span className="font-bold text-[#FF7A00] inline-flex items-center gap-1 group-hover:translate-x-0.5 transition">
-                        Enroll Now <ArrowRight className="w-3.5 h-3.5" />
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <CourseShareButton course={course} variant="card" />
+                        <span className="font-bold text-[#FF7A00] inline-flex items-center gap-1 group-hover:translate-x-0.5 transition">
+                          Enroll Now <ArrowRight className="w-3.5 h-3.5" />
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </Link>

@@ -251,9 +251,77 @@ router.post('/courses/:courseId/review', (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+function attributeCourseReferral(
+  studentId: number,
+  courseId: number,
+  rawReferralCode?: unknown,
+  paymentId: number | null = null
+): void {
+  const cleanCode = String(rawReferralCode || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  if (!cleanCode) return;
+
+  // Validate against course_referral_links or user referral_code
+  let link = db
+    .prepare("SELECT * FROM course_referral_links WHERE UPPER(referral_code) = ? AND status = 'active'")
+    .get(cleanCode) as
+    | { id: number; course_id: number; referrer_id: number | null; referral_code: string }
+    | undefined;
+
+  if (!link) {
+    const refOwner = db
+      .prepare('SELECT id FROM users WHERE UPPER(referral_code) = ? AND is_active = 1')
+      .get(cleanCode) as { id: number } | undefined;
+    if (!refOwner) return; // Invalid referral code -> ignore safely
+
+    const generatedCode = `${cleanCode}-${courseId}`;
+    const existingLink = db
+      .prepare('SELECT * FROM course_referral_links WHERE referral_code = ?')
+      .get(generatedCode) as typeof link;
+    if (existingLink) {
+      link = existingLink;
+    } else {
+      db.prepare(`
+        INSERT INTO course_referral_links (course_id, referrer_id, referral_code, clicks, enrollments_count, status)
+        VALUES (?, ?, ?, 1, 0, 'active')
+      `).run(courseId, refOwner.id, generatedCode);
+      link = db
+        .prepare('SELECT * FROM course_referral_links WHERE referral_code = ?')
+        .get(generatedCode) as typeof link;
+    }
+  }
+
+  if (!link) return;
+  // Prevent self-referral abuse
+  if (link.referrer_id && link.referrer_id === studentId) return;
+
+  // Prevent duplicate attribution for the same student + course
+  const dup = db
+    .prepare('SELECT id FROM course_referral_attributions WHERE course_id = ? AND referred_user_id = ?')
+    .get(courseId, studentId);
+  if (dup) return;
+
+  db.prepare(`
+    INSERT INTO course_referral_attributions (course_id, referral_code, referrer_id, referred_user_id, payment_id)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(courseId, link.referral_code, link.referrer_id, studentId, paymentId);
+
+  db.prepare('UPDATE course_referral_links SET enrollments_count = enrollments_count + 1 WHERE id = ?').run(link.id);
+  db.prepare(
+    "INSERT INTO referral_events (course_id, referral_code, event_type, actor_user_id) VALUES (?, ?, 'course_enrollment', ?)"
+  ).run(courseId, link.referral_code, studentId);
+
+  if (link.referrer_id) {
+    const course = db.prepare('SELECT title FROM courses WHERE id = ?').get(courseId) as { title: string } | undefined;
+    db.prepare(`
+      INSERT INTO notifications (user_id, title, message, type)
+      VALUES (?, 'Course Referral Enrollment!', ?, 'success')
+    `).run(link.referrer_id, `A learner enrolled in "${course?.title || 'a course'}" via your referral link (${link.referral_code})!`);
+  }
+}
+
 router.post('/enroll/free', (req, res) => {
   const sid = req.user!.id;
-  const { course_id, batch_id } = req.body || {};
+  const { course_id, batch_id, referral_code } = req.body || {};
   const course = db
     .prepare('SELECT * FROM courses WHERE id = ? AND is_published = 1')
     .get(Number(course_id)) as { id: number; title: string; is_free: number; price: number; discount_price: number | null } | undefined;
@@ -291,6 +359,8 @@ router.post('/enroll/free', (req, res) => {
   if (batch_id) {
     db.prepare('UPDATE batches SET enrolled_seats = enrolled_seats + 1 WHERE id = ?').run(Number(batch_id));
   }
+
+  attributeCourseReferral(sid, course.id, referral_code, null);
 
   db.prepare(`
     INSERT INTO notifications (user_id, title, message, type)
@@ -365,7 +435,7 @@ router.post('/checkout', (req, res) => {
 router.post('/payments/:paymentId/verify', (req, res) => {
   const sid = req.user!.id;
   const paymentId = Number(req.params.paymentId);
-  const { simulate = 'success', batch_id } = req.body || {};
+  const { simulate = 'success', batch_id, referral_code } = req.body || {};
 
   const payment = db
     .prepare('SELECT * FROM payments WHERE id = ? AND student_id = ?')
@@ -417,6 +487,7 @@ router.post('/payments/:paymentId/verify', (req, res) => {
       if (batch_id) {
         db.prepare('UPDATE batches SET enrolled_seats = enrolled_seats + 1 WHERE id = ?').run(Number(batch_id));
       }
+      attributeCourseReferral(sid, payment.item_id, referral_code, payment.id);
     }
   } else if (payment.item_type === 'subscription') {
     const plan = db
@@ -655,6 +726,35 @@ router.get('/referrals', (req, res) => {
     .filter((r) => r.status === 'successful')
     .reduce((sum, r) => sum + Number(r.reward_amount || 0), 0);
 
+  const courseShares = db
+    .prepare(`
+      SELECT crl.*, c.title as course_title, c.slug as course_slug, c.short_description,
+             c.thumbnail_url, c.price, c.discount_price, c.is_free
+      FROM course_referral_links crl
+      JOIN courses c ON c.id = crl.course_id
+      WHERE crl.referrer_id = ?
+      ORDER BY crl.created_at DESC
+    `)
+    .all(sid) as Array<{ clicks: number; enrollments_count: number }>;
+
+  const courseStats = {
+    coursesShared: courseShares.length,
+    totalClicks: courseShares.reduce((s, r) => s + Number(r.clicks || 0), 0),
+    successfulEnrollments: courseShares.reduce((s, r) => s + Number(r.enrollments_count || 0), 0),
+  };
+
+  const recentEvents = db
+    .prepare(`
+      SELECT re.event_type, re.referral_code, re.created_at, c.title as course_title
+      FROM referral_events re
+      JOIN course_referral_links crl ON crl.referral_code = re.referral_code
+      JOIN courses c ON c.id = re.course_id
+      WHERE crl.referrer_id = ?
+      ORDER BY re.created_at DESC
+      LIMIT 15
+    `)
+    .all(sid);
+
   res.json({
     referral_code: req.user!.referral_code,
     stats: {
@@ -664,6 +764,9 @@ router.get('/referrals', (req, res) => {
     },
     config,
     referrals: list,
+    courseShares,
+    courseStats,
+    recentEvents,
   });
 });
 

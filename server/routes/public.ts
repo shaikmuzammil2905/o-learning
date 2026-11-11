@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'node:crypto';
 import db from '../db.js';
 import { attachOptionalUser } from '../auth.js';
 
@@ -275,6 +276,124 @@ router.get('/certificates/verify/:code', (req, res) => {
     return;
   }
   res.json(cert);
+});
+
+const ALLOWED_REFERRAL_EVENTS = new Set([
+  'share_clicked',
+  'referral_link_generated',
+  'referral_link_copied',
+  'whatsapp_share',
+  'instagram_share',
+  'native_share',
+  'referral_visit',
+]);
+
+router.post('/referrals/generate', attachOptionalUser, (req, res) => {
+  const { course_id } = req.body || {};
+  const course = db
+    .prepare('SELECT id, slug, title FROM courses WHERE (id = ? OR slug = ?) AND is_published = 1')
+    .get(Number(course_id) || -1, String(course_id || '')) as
+    | { id: number; slug: string; title: string }
+    | undefined;
+
+  if (!course) {
+    res.status(404).json({ error: 'Course not found.' });
+    return;
+  }
+
+  // If authenticated, reuse existing active referral link for this user + course
+  if (req.user) {
+    const existing = db
+      .prepare("SELECT * FROM course_referral_links WHERE course_id = ? AND referrer_id = ? AND status = 'active' LIMIT 1")
+      .get(course.id, req.user.id) as { referral_code: string } | undefined;
+    if (existing) {
+      db.prepare(
+        "INSERT INTO referral_events (course_id, referral_code, event_type, actor_user_id) VALUES (?, ?, 'referral_link_generated', ?)"
+      ).run(course.id, existing.referral_code, req.user.id);
+      res.json({ referral_code: existing.referral_code, course_id: course.id, course_slug: course.slug });
+      return;
+    }
+  }
+
+  let code = `OL-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+  while (db.prepare('SELECT id FROM course_referral_links WHERE referral_code = ?').get(code)) {
+    code = `OL-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+  }
+
+  db.prepare(`
+    INSERT INTO course_referral_links (course_id, referrer_id, referral_code, clicks, enrollments_count, status)
+    VALUES (?, ?, ?, 0, 0, 'active')
+  `).run(course.id, req.user?.id ?? null, code);
+
+  db.prepare(
+    "INSERT INTO referral_events (course_id, referral_code, event_type, actor_user_id) VALUES (?, ?, 'referral_link_generated', ?)"
+  ).run(course.id, code, req.user?.id ?? null);
+
+  res.status(201).json({ referral_code: code, course_id: course.id, course_slug: course.slug });
+});
+
+router.post('/referrals/track', attachOptionalUser, (req, res) => {
+  const { course_id, referral_code, event_type } = req.body || {};
+  if (!ALLOWED_REFERRAL_EVENTS.has(String(event_type))) {
+    res.status(400).json({ error: 'Invalid referral event type.' });
+    return;
+  }
+
+  const course = db
+    .prepare('SELECT id, slug FROM courses WHERE (id = ? OR slug = ?) AND is_published = 1')
+    .get(Number(course_id) || -1, String(course_id || '')) as { id: number; slug: string } | undefined;
+  if (!course) {
+    res.status(404).json({ error: 'Course not found.' });
+    return;
+  }
+
+  const cleanCode = String(referral_code || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  if (!cleanCode) {
+    res.status(400).json({ error: 'Referral code is required.' });
+    return;
+  }
+
+  // Validate link exists or corresponds to a valid user referral_code
+  let link = db
+    .prepare('SELECT * FROM course_referral_links WHERE UPPER(referral_code) = ?')
+    .get(cleanCode) as { id: number; course_id: number; referrer_id: number | null; status: string } | undefined;
+
+  if (!link && event_type === 'referral_visit') {
+    const refOwner = db
+      .prepare('SELECT id FROM users WHERE UPPER(referral_code) = ? AND is_active = 1')
+      .get(cleanCode) as { id: number } | undefined;
+    if (refOwner) {
+      const generatedCode = `${cleanCode}-${course.id}`;
+      const existing = db
+        .prepare('SELECT * FROM course_referral_links WHERE referral_code = ?')
+        .get(generatedCode) as typeof link;
+      if (!existing) {
+        db.prepare(`
+          INSERT INTO course_referral_links (course_id, referrer_id, referral_code, clicks, enrollments_count, status)
+          VALUES (?, ?, ?, 0, 0, 'active')
+        `).run(course.id, refOwner.id, generatedCode);
+        link = db
+          .prepare('SELECT * FROM course_referral_links WHERE referral_code = ?')
+          .get(generatedCode) as typeof link;
+      } else {
+        link = existing;
+      }
+    }
+  }
+
+  if (link && link.status === 'active' && event_type === 'referral_visit') {
+    // Prevent inflating clicks when the referrer themselves visits their own link
+    if (!req.user || link.referrer_id !== req.user.id) {
+      db.prepare('UPDATE course_referral_links SET clicks = clicks + 1 WHERE id = ?').run(link.id);
+    }
+  }
+
+  db.prepare(`
+    INSERT INTO referral_events (course_id, referral_code, event_type, actor_user_id)
+    VALUES (?, ?, ?, ?)
+  `).run(course.id, cleanCode, String(event_type), req.user?.id ?? null);
+
+  res.json({ ok: true });
 });
 
 export default router;

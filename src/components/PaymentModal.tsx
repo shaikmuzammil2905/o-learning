@@ -11,6 +11,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { api, formatCurrency } from '../lib/api';
+import { clearStoredReferralCode, getStoredReferralCode } from '../lib/referral';
 
 interface PaymentModalProps {
   open: boolean;
@@ -22,6 +23,7 @@ interface PaymentModalProps {
   discountAmount: number;
   finalAmount: number;
   batchId?: number | null;
+  referralCode?: string | null;
   onSuccess: () => void;
 }
 
@@ -37,6 +39,7 @@ export function PaymentModal({
   discountAmount,
   finalAmount,
   batchId,
+  referralCode,
   onSuccess,
 }: PaymentModalProps) {
   const [method, setMethod] = useState<PayMethod>('UPI');
@@ -65,13 +68,21 @@ export function PaymentModal({
         }
       );
 
+      const activeRefCode = referralCode || getStoredReferralCode();
       const verified = await api<{
         payment: { order_ref: string; gateway_txn_id: string; final_amount: number };
       }>(`/api/student/payments/${checkout.payment.id}/verify`, {
         method: 'POST',
-        body: JSON.stringify({ simulate, batch_id: batchId || null }),
+        body: JSON.stringify({
+          simulate,
+          batch_id: batchId || null,
+          referral_code: itemType === 'course' ? activeRefCode : null,
+        }),
       });
 
+      if (itemType === 'course' && activeRefCode) {
+        clearStoredReferralCode();
+      }
       setReceipt(verified.payment);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Payment could not be completed.');

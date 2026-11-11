@@ -354,10 +354,10 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         target="_blank"
         rel="noreferrer"
         aria-label="Chat on WhatsApp"
-        className="fixed bottom-20 md:bottom-6 right-4 z-40 w-13 h-13 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
+        className="fixed bottom-[74px] md:bottom-6 right-3 md:right-5 z-40 w-11 h-11 md:w-13 md:h-13 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
       >
         <span className="absolute inset-0 rounded-full bg-[#25D366] animate-pulse-ring" />
-        <MessageCircle className="w-7 h-7 relative z-10 fill-white" />
+        <MessageCircle className="w-6 h-6 md:w-7 md:h-7 relative z-10 fill-white" />
       </a>
 
       {/* Mobile App Bottom Navigation (Home, My Learning, Courses, Tests, Profile) */}
