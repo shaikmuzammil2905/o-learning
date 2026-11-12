@@ -14,19 +14,6 @@ router.get('/cms', (_req, res) => {
   for (const r of rows) {
     cms[r.key] = JSON.parse(r.value_json);
   }
-
-  // Override stats dynamically from real database records (never hardcoded numbers)
-  const publishedCourses = (db.prepare('SELECT COUNT(*) as c FROM courses WHERE is_published = 1').get() as { c: number }).c;
-  const learners = (db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'student'").get() as { c: number }).c;
-  const faculty = (db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'faculty'").get() as { c: number }).c;
-  const enrollments = (db.prepare('SELECT COUNT(*) as c FROM enrollments').get() as { c: number }).c;
-  cms.stats = [
-    { label: 'Courses & Programs', value: String(publishedCourses), icon: 'BookOpen' },
-    { label: 'Happy Learners', value: String(learners), icon: 'Users' },
-    { label: 'Expert Faculty', value: String(faculty), icon: 'UserCheck' },
-    { label: 'Verified Enrollments', value: String(enrollments), icon: 'BadgeCheck' },
-  ];
-
   res.json(cms);
 });
 
