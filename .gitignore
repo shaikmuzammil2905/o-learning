@@ -9,5 +9,9 @@ data/
 .DS_Store
 *.pem
 *.key
+*.csv
+ec2-server.js
+
+
 
 

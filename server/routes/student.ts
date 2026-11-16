@@ -370,7 +370,7 @@ router.post('/enroll/free', (req, res) => {
   res.status(201).json({ ok: true, course_id: course.id });
 });
 
-router.post('/checkout', (req, res) => {
+router.post('/checkout', async (req, res) => {
   const sid = req.user!.id;
   const { item_type, item_id, method = 'UPI' } = req.body || {};
   const validMethods = ['UPI', 'Card', 'NetBanking', 'Wallet'];
@@ -438,13 +438,68 @@ router.post('/checkout', (req, res) => {
     .update(`${payment.id}:${payment.order_ref}:${sid}:${payment.final_amount}`)
     .digest('hex');
 
-  res.status(201).json({ payment, verification_token: verificationToken });
+  // Razorpay Order Creation via official API
+  const rzpKeyId = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_U0uW1zCdYUSuPO';
+  const rzpKeySecret = process.env.RAZORPAY_KEY_SECRET || 'rSLPGCibFy5ynJTWWR2nU3Fj';
+  let razorpayOrder: { id: string; amount: number; currency: string } | null = null;
+
+  if (finalAmount > 0 && rzpKeyId && rzpKeySecret) {
+    try {
+      const basicAuth = Buffer.from(`${rzpKeyId}:${rzpKeySecret}`).toString('base64');
+      const rzpRes = await fetch('https://api.razorpay.com/v1/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${basicAuth}`,
+        },
+        body: JSON.stringify({
+          amount: Math.round(finalAmount * 100), // amount in paise
+          currency: 'INR',
+          receipt: orderRef,
+          notes: {
+            payment_id: String(payment.id),
+            item_type: String(item_type),
+            item_id: String(item_id),
+            student_id: String(sid),
+          },
+        }),
+      });
+
+      if (rzpRes.ok) {
+        razorpayOrder = (await rzpRes.json()) as { id: string; amount: number; currency: string };
+      } else {
+        const errText = await rzpRes.text();
+        console.warn('Razorpay order creation returned non-200:', errText);
+      }
+    } catch (rzpErr) {
+      console.warn('Razorpay order creation network issue:', rzpErr);
+    }
+  }
+
+  res.status(201).json({
+    payment,
+    verification_token: verificationToken,
+    razorpay: {
+      key_id: rzpKeyId,
+      order_id: razorpayOrder?.id || null,
+      amount: razorpayOrder?.amount || Math.round(finalAmount * 100),
+      currency: razorpayOrder?.currency || 'INR',
+    },
+  });
 });
 
 router.post('/payments/:paymentId/verify', (req, res) => {
   const sid = req.user!.id;
   const paymentId = Number(req.params.paymentId);
-  const { simulate = 'success', batch_id, referral_code, verification_token } = req.body || {};
+  const {
+    simulate = 'success',
+    batch_id,
+    referral_code,
+    verification_token,
+    razorpay_payment_id,
+    razorpay_order_id,
+    razorpay_signature,
+  } = req.body || {};
 
   const payment = db
     .prepare('SELECT * FROM payments WHERE id = ? AND student_id = ?')
@@ -488,6 +543,20 @@ router.post('/payments/:paymentId/verify', (req, res) => {
     }
   }
 
+  // Cryptographic Razorpay Signature Verification
+  const rzpKeySecret = process.env.RAZORPAY_KEY_SECRET || 'rSLPGCibFy5ynJTWWR2nU3Fj';
+  if (razorpay_payment_id && razorpay_order_id && razorpay_signature && rzpKeySecret) {
+    const expectedSignature = crypto
+      .createHmac('sha256', rzpKeySecret)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
+
+    if (expectedSignature !== razorpay_signature) {
+      res.status(403).json({ error: 'Razorpay payment signature verification failed. Untrusted payment transaction.' });
+      return;
+    }
+  }
+
   if (simulate === 'fail') {
     db.prepare("UPDATE payments SET status = 'failed', gateway_txn_id = ? WHERE id = ?").run(
       `FAIL-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
@@ -524,7 +593,7 @@ router.post('/payments/:paymentId/verify', (req, res) => {
     }
   }
 
-  const txnId = `${payment.method.toUpperCase()}-OLR-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+  const txnId = razorpay_payment_id || `${payment.method.toUpperCase()}-OLR-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
   db.prepare("UPDATE payments SET status = 'successful', gateway_txn_id = ? WHERE id = ?").run(txnId, payment.id);
 
   if (payment.item_type === 'course') {
