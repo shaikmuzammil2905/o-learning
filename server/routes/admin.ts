@@ -594,7 +594,7 @@ router.post('/courses', (req, res) => {
       faculty_id ? Number(faculty_id) : null,
       JSON.stringify(what_you_learn),
       JSON.stringify(faqs),
-      is_published ? 1 : 0
+      is_published !== undefined && is_published !== null ? (is_published ? 1 : 0) : 1
     );
 
   const cid = Number(r.lastInsertRowid);
@@ -759,6 +759,59 @@ router.post('/courses/:id/lessons', (req, res) => {
 
 router.delete('/lessons/:lessonId', (req, res) => {
   db.prepare('DELETE FROM lessons WHERE id = ?').run(Number(req.params.lessonId));
+  res.json({ ok: true });
+});
+
+// PDF Notes Management
+router.get('/courses/:id/notes', (req, res) => {
+  const cid = Number(req.params.id);
+  const notes = db
+    .prepare('SELECT * FROM course_notes WHERE course_id = ? ORDER BY id DESC')
+    .all(cid);
+  res.json(notes);
+});
+
+router.post('/courses/:id/notes', (req, res) => {
+  const cid = Number(req.params.id);
+  const { title, description = '', file_url = '', file_size_text = '2.4 MB', is_published = 1 } = req.body || {};
+  if (!title) {
+    res.status(400).json({ error: 'Note title is required.' });
+    return;
+  }
+  const r = db
+    .prepare(`
+      INSERT INTO course_notes (course_id, title, description, file_url, file_size_text, is_published)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `)
+    .run(cid, String(title).trim(), String(description).trim(), String(file_url).trim(), String(file_size_text).trim(), is_published ? 1 : 0);
+  res.status(201).json(db.prepare('SELECT * FROM course_notes WHERE id = ?').get(Number(r.lastInsertRowid)));
+});
+
+router.put('/notes/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const { title, description, file_url, file_size_text, is_published } = req.body || {};
+  db.prepare(`
+    UPDATE course_notes
+    SET title = COALESCE(?, title),
+        description = COALESCE(?, description),
+        file_url = COALESCE(?, file_url),
+        file_size_text = COALESCE(?, file_size_text),
+        is_published = COALESCE(?, is_published),
+        updated_at = datetime('now')
+    WHERE id = ?
+  `).run(
+    title !== undefined ? String(title).trim() : null,
+    description !== undefined ? String(description).trim() : null,
+    file_url !== undefined ? String(file_url).trim() : null,
+    file_size_text !== undefined ? String(file_size_text).trim() : null,
+    is_published !== undefined ? (is_published ? 1 : 0) : null,
+    id
+  );
+  res.json(db.prepare('SELECT * FROM course_notes WHERE id = ?').get(id));
+});
+
+router.delete('/notes/:id', (req, res) => {
+  db.prepare('DELETE FROM course_notes WHERE id = ?').run(Number(req.params.id));
   res.json({ ok: true });
 });
 
@@ -942,7 +995,7 @@ router.post('/tests', (req, res) => {
       Number(pass_marks),
       Number(negative_marks),
       difficulty,
-      is_published ? 1 : 0,
+      is_published !== undefined && is_published !== null ? (is_published ? 1 : 0) : 1,
       Number(price || 0),
       certificate_enabled ? 1 : 0,
       String(expiry_date || ''),

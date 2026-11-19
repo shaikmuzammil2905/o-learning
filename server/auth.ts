@@ -4,7 +4,7 @@ import db from './db.js';
 
 const JWT_SECRET =
   process.env.JWT_SECRET ||
-  crypto.createHash('sha256').update('o-learning-platform-hyderabad-2026-secret').digest('hex');
+  crypto.createHash('sha256').update('o-learning-platform-india-2026-secret').digest('hex');
 
 export interface AuthUser {
   id: number;

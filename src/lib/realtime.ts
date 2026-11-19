@@ -10,7 +10,14 @@ export function broadcastPlatformUpdate(type: string): void {
       ch.postMessage({ type, ts: Date.now() });
       ch.close();
     }
-    window.dispatchEvent(new CustomEvent('olearning:update', { detail: { type } }));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('olearning:update', { detail: { type } }));
+      try {
+        localStorage.setItem('olearn_sync_trigger', JSON.stringify({ type, ts: Date.now() }));
+      } catch {
+        // ignore quota / private browsing errors
+      }
+    }
   } catch {
     // ignore in restricted environments
   }
@@ -29,6 +36,13 @@ export function subscribePlatformUpdates(onUpdate: () => void): () => void {
 
   const handleWindowEvt = () => onUpdate();
   window.addEventListener('olearning:update', handleWindowEvt);
+
+  const handleStorageEvt = (e: StorageEvent) => {
+    if (e.key === 'olearn_sync_trigger') {
+      onUpdate();
+    }
+  };
+  window.addEventListener('storage', handleStorageEvt);
 
   // Unique channel name per subscriber avoids Supabase 'cannot add postgres_changes callbacks after subscribe()' error
   let supaChannel: ReturnType<NonNullable<typeof supabase>['channel']> | null = null;
@@ -50,6 +64,7 @@ export function subscribePlatformUpdates(onUpdate: () => void): () => void {
       // ignore
     }
     window.removeEventListener('olearning:update', handleWindowEvt);
+    window.removeEventListener('storage', handleStorageEvt);
     if (supabase && supaChannel) {
       try {
         supabase.removeChannel(supaChannel);

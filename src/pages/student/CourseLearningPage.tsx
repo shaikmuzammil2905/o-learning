@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   Award,
@@ -6,13 +6,32 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  Eye,
+  FileCheck2,
   FileText,
+  Lock,
   PlayCircle,
+  Printer,
+  Sparkles,
+  Volume2,
+  X,
 } from 'lucide-react';
 import { DashboardLayout, STUDENT_LINKS } from '../../components/DashboardLayout';
 import { ErrorState, LoadingState } from '../../components/ui/StateViews';
 import { api } from '../../lib/api';
 import type { Certificate, Course, CourseModule, Lesson } from '../../types';
+
+export interface NoteItem {
+  id: number;
+  course_id: number;
+  title: string;
+  description: string;
+  file_url: string;
+  file_size_text: string;
+  file_size_bytes: number;
+  is_published: number;
+  created_at?: string;
+}
 
 interface LearnData {
   course: Course;
@@ -23,6 +42,7 @@ interface LearnData {
     completed_lessons: number[];
   };
   modules: CourseModule[];
+  notes?: NoteItem[];
   certificate: Certificate | null;
 }
 
@@ -33,6 +53,9 @@ export function CourseLearningPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [previewNote, setPreviewNote] = useState<NoteItem | null>(null);
+  const [downloadMsg, setDownloadMsg] = useState('');
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -220,6 +243,139 @@ export function CourseLearningPage() {
               </div>
             </div>
           ) : null}
+
+          {/* COURSE NOTES SECTION (Requirement 1: Course Completion & PDF Notes Download System) */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-display font-bold text-lg text-[#002B7A]">
+                    Course Notes & PDF Handbooks
+                  </h3>
+                  {data.enrollment?.progress_percent === 100 ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
+                      <FileCheck2 className="w-3.5 h-3.5" /> PDF Download Unlocked
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold">
+                      <Lock className="w-3.5 h-3.5" /> Unlocks at 100% Progress
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Official printable study notes, formula sheets and handbook. Available for download upon completing 100% of this course.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5 text-[#0052CC]" /> Print / Export
+              </button>
+            </div>
+
+            {downloadMsg && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 font-medium">
+                {downloadMsg}
+              </div>
+            )}
+
+            {/* List of Notes */}
+            <div className="space-y-3">
+              {(data.notes && data.notes.length > 0
+                ? data.notes
+                : [
+                    {
+                      id: 1,
+                      course_id: data.course.id,
+                      title: `${data.course.title} — Official Course Handbook & Formula Sheet`,
+                      description:
+                        'Complete reference guide covering all core chapters, key definitions, cheat sheets, and practical examples.',
+                      file_url: `/api/public/materials/${data.course.id}/1`,
+                      file_size_text: '3.2 MB',
+                      file_size_bytes: 3355443,
+                      is_published: 1,
+                    },
+                    {
+                      id: 2,
+                      course_id: data.course.id,
+                      title: `${data.course.title} — High-Yield Revision Capsule & Question Bank`,
+                      description:
+                        'Exam-focused summary notes and solved question walkthroughs for rapid concept revision.',
+                      file_url: `/api/public/materials/${data.course.id}/2`,
+                      file_size_text: '1.8 MB',
+                      file_size_bytes: 1887436,
+                      is_published: 1,
+                    },
+                  ]
+              ).map((note) => {
+                const isUnlocked = data.enrollment?.progress_percent === 100;
+                return (
+                  <div
+                    key={note.id}
+                    className="p-4 rounded-2xl border border-slate-200/90 bg-slate-50/50 hover:bg-white hover:border-[#0052CC]/40 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0 flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-100/70 text-[#0052CC] flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-[#0F172A] leading-snug">
+                          {note.title}
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
+                          {note.description}
+                        </p>
+                        <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-1 font-medium">
+                          <span>PDF Format</span>
+                          <span>•</span>
+                          <span>{note.file_size_text || '2.4 MB'}</span>
+                          <span>•</span>
+                          <span>O-Learning Official</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewNote(note)}
+                        className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer transition"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-[#0052CC]" /> Preview
+                      </button>
+
+                      {isUnlocked ? (
+                        <a
+                          href={`/api/student/learn/${data.course.id}/notes/${note.id}/download`}
+                          download
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer transition"
+                        >
+                          <Download className="w-3.5 h-3.5" /> Download PDF
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDownloadMsg(
+                              `Complete 100% of the lessons in this course to unlock "${note.title}". Current progress: ${data.enrollment?.progress_percent || 0}%`
+                            );
+                            setTimeout(() => setDownloadMsg(''), 6000);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-200 text-slate-500 text-xs font-bold cursor-not-allowed"
+                          title="Complete 100% of the course to unlock"
+                        >
+                          <Lock className="w-3.5 h-3.5" /> Locked (100% req.)
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Course Curriculum Sidebar */}
@@ -282,6 +438,85 @@ export function CourseLearningPage() {
           </div>
         </div>
       </div>
+
+      {/* NOTE PREVIEW MODAL */}
+      {previewNote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-display font-bold text-lg text-[#002B7A]">
+                  {previewNote.title}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Official O-LEARNING Study Notes · {previewNote.file_size_text || '2.4 MB'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewNote(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-sm text-slate-700 space-y-3 font-sans leading-relaxed">
+              <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs">
+                <p className="font-bold text-[#0052CC]">Document Overview:</p>
+                <p className="text-slate-600 mt-1">{previewNote.description}</p>
+                <p className="text-slate-400 mt-1">Publisher: O-LEARNING PLATFORM · Location: India</p>
+              </div>
+
+              <div className="space-y-2 text-xs text-slate-600">
+                <h4 className="font-bold text-slate-800 text-sm">Key Chapter Modules & Takeaways:</h4>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Comprehensive foundational theory and practical application rules.</li>
+                  <li>Worked examples, common interview / exam pitfalls, and solution methods.</li>
+                  <li>Formula summaries, quick reference diagrams, and syntax cheatsheets.</li>
+                  <li>Self-assessment mock questions with detailed explanations.</li>
+                </ul>
+              </div>
+
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-800">
+                <p className="font-bold">Full PDF Download:</p>
+                <p className="mt-0.5">
+                  {data.enrollment?.progress_percent === 100
+                    ? 'Your course progress is 100%. Click Download PDF below to save the complete document.'
+                    : `Currently locked. You have completed ${data.enrollment?.progress_percent || 0}% of the course. Complete 100% of all lessons to unlock the full official download.`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setPreviewNote(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Close Preview
+              </button>
+              {data.enrollment?.progress_percent === 100 ? (
+                <a
+                  href={`/api/student/learn/${data.course.id}/notes/${previewNote.id}/download`}
+                  download
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
+                >
+                  Download PDF
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="px-5 py-2 rounded-xl bg-slate-200 text-slate-500 text-xs font-bold cursor-not-allowed"
+                >
+                  Locked (Complete 100%)
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

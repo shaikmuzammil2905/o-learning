@@ -40,7 +40,7 @@ const WHY_CHOOSE_ITEMS = [
     icon: Users,
     badge: '50+ Mentors · 10–15+ Yrs Exp',
     summary:
-      'Learn directly from IIT alumni, retired civil services mentors, Cambridge CELTA trainers, and senior Hyderabad software architects who break down complex concepts step by step.',
+      'Learn directly from IIT alumni, retired civil services mentors, Cambridge CELTA trainers, and senior software architects who break down complex concepts step by step.',
     metrics: [
       { label: 'Avg Experience', value: '12+ Years' },
       { label: 'Live Doubt Solving', value: 'Daily Q&A' },
@@ -120,7 +120,7 @@ const WHY_CHOOSE_ITEMS = [
     icon: Headphones,
     badge: 'Dedicated Counselor & Mentor Help',
     summary:
-      'Stay confident throughout your preparation with live class Q&A, faculty feedback, and direct academic support via phone and WhatsApp from our Hyderabad student success desk.',
+      'Stay confident throughout your preparation with live class Q&A, faculty feedback, and direct academic support via phone and WhatsApp from our student success desk.',
     metrics: [
       { label: 'WhatsApp', value: '9121403515' },
       { label: 'Helpline', value: '8978991329' },

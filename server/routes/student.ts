@@ -167,12 +167,60 @@ router.get('/learn/:courseId', (req, res) => {
     .prepare('SELECT * FROM certificates WHERE student_id = ? AND course_id = ?')
     .get(sid, courseId);
 
+  const notes = db
+    .prepare('SELECT * FROM course_notes WHERE course_id = ? AND is_published = 1 ORDER BY id ASC')
+    .all(courseId) as Array<Record<string, unknown>>;
+
   res.json({
     course,
     enrollment: enrollment ? { ...enrollment, completed_lessons: completedLessons } : null,
     modules: modulesWithLessons,
+    notes,
     certificate: certificate || null,
   });
+});
+
+router.get('/learn/:courseId/notes/:noteId/download', (req, res) => {
+  const sid = req.user!.id;
+  const courseId = Number(req.params.courseId);
+  const noteId = Number(req.params.noteId);
+
+  const enrollment = db
+    .prepare('SELECT progress_percent FROM enrollments WHERE student_id = ? AND course_id = ?')
+    .get(sid, courseId) as { progress_percent: number } | undefined;
+
+  const isCompleted = (enrollment && enrollment.progress_percent === 100) || req.user!.role === 'admin';
+  if (!isCompleted) {
+    res.status(403).json({
+      error: 'Course completion required! Complete 100% of the course to unlock the official PDF notes download.',
+      progress_percent: enrollment?.progress_percent || 0,
+    });
+    return;
+  }
+
+  const note = db
+    .prepare('SELECT * FROM course_notes WHERE id = ? AND course_id = ?')
+    .get(noteId, courseId) as Record<string, any> | undefined;
+
+  if (!note) {
+    res.status(404).json({ error: 'Note not found.' });
+    return;
+  }
+
+  if (note.file_url && (note.file_url.startsWith('http://') || note.file_url.startsWith('https://'))) {
+    res.redirect(note.file_url);
+    return;
+  }
+
+  const course = db.prepare('SELECT title, short_description FROM courses WHERE id = ?').get(courseId) as
+    | { title: string; short_description: string }
+    | undefined;
+
+  const content = `=======================================================\nO-LEARNING PLATFORM — OFFICIAL COURSE HANDBOOK\n=======================================================\nCourse: ${course?.title || ''}\nDocument: ${note.title}\nStatus: Course Completed (100% Progress Milestone)\nLocation: India\nWebsite: https://o-learning.vercel.app/\n\nDescription:\n${note.description || course?.short_description || ''}\n\nKey Concepts & Reference Guidelines:\n1. Master the core principles, syntax, formulas, and methodologies explained in each module.\n2. Revise formula sheets and solved question banks ahead of competitive tests and job assessments.\n3. Review your official Course Certificate (ID verified) from your student dashboard.\n\nAcademic Support: olearningplatform33@gmail.com | Helpline: 8978991329 / 9121403515\n=======================================================\n`;
+
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="olearning-${note.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.txt"`);
+  res.send(content);
 });
 
 router.post('/learn/:courseId/lessons/:lessonId/complete', (req, res) => {

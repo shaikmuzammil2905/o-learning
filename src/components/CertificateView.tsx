@@ -54,7 +54,7 @@ export function CertificateView({
               {certificate.course_title}
             </h3>
             <p className="text-xs text-slate-500 mt-2">
-              Issued by O-LEARNING PLATFORM · Hyderabad, Telangana, India
+              Issued by O-LEARNING PLATFORM · India
             </p>
           </div>
 

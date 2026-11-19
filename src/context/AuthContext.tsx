@@ -22,14 +22,38 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(() => {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('olearn_user');
+      if (cached) {
+        try {
+          return JSON.parse(cached);
+        } catch {
+          // ignore corrupted json
+        }
+      }
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !localStorage.getItem('olearn_user');
+    }
+    return true;
+  });
 
   const refreshUser = useCallback(async () => {
     try {
       const data = await api<{ user: User }>('/api/auth/me');
       setUser(data.user);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('olearn_user', JSON.stringify(data.user));
+      }
     } catch {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('olearn_user');
+        localStorage.removeItem('olearn_token');
+      }
       setUser(null);
     } finally {
       setLoading(false);
@@ -41,10 +65,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshUser]);
 
   const login = async (identifier: string, password: string, rememberMe = true) => {
-    const data = await api<{ user: User }>('/api/auth/login', {
+    const data = await api<{ user: User; token: string }>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ identifier, password, rememberMe }),
     });
+    if (typeof window !== 'undefined' && data.token) {
+      localStorage.setItem('olearn_token', data.token);
+      localStorage.setItem('olearn_user', JSON.stringify(data.user));
+    }
     setUser(data.user);
     return data.user;
   };
@@ -57,10 +85,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     confirm_password: string;
     referral_code?: string;
   }) => {
-    const data = await api<{ user: User }>('/api/auth/register', {
+    const data = await api<{ user: User; token: string }>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+    if (typeof window !== 'undefined' && data.token) {
+      localStorage.setItem('olearn_token', data.token);
+      localStorage.setItem('olearn_user', JSON.stringify(data.user));
+    }
     setUser(data.user);
     return data.user;
   };
@@ -69,6 +101,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await api('/api/auth/logout', { method: 'POST' });
     } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('olearn_user');
+        localStorage.removeItem('olearn_token');
+      }
       setUser(null);
     }
   };

@@ -11,6 +11,8 @@ data/
 *.key
 *.csv
 ec2-server.js
+image copy *.png
+
 
 
 

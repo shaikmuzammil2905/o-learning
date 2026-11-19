@@ -3,7 +3,7 @@
 **Learn Today, Lead Tomorrow!**  
 *Your Learning Partner for a Better Future.*
 
-A full-stack EdTech LMS, Public Website, Student Learning App, Faculty Portal, and Admin Management System built for **O-LEARNING PLATFORM** (Hyderabad, Telangana, India).
+A full-stack EdTech LMS, Public Website, Student Learning App, Faculty Portal, and Admin Management System built for **O-LEARNING PLATFORM** (India).
 
 ---
 

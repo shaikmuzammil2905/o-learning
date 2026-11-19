@@ -41,7 +41,7 @@ export function ContactPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h1 className="font-display font-extrabold text-2xl sm:text-4xl">Contact & Student Support</h1>
           <p className="text-sm sm:text-base text-blue-100 mt-2">
-            Reach our Hyderabad academic counselors by phone, WhatsApp, email, or submit an enquiry below.
+            Reach our academic counselors by phone, WhatsApp, email, or submit an enquiry below.
           </p>
         </div>
       </section>
@@ -95,14 +95,14 @@ export function ContactPage() {
               <MapPin className="w-5 h-5 text-[#0052CC] shrink-0 mt-0.5" />
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase">Office Location</p>
-                <p className="text-sm font-semibold text-slate-800 mt-0.5">{cms.contact.location}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{cms.contact.address}</p>
+                <p className="text-sm font-bold text-slate-800 mt-0.5">Location: India</p>
+                <p className="text-xs text-slate-500 mt-0.5">Nationwide Online Learning Platform · India</p>
               </div>
             </div>
             <div className="rounded-xl overflow-hidden border border-slate-200 h-44 bg-blue-50">
               <iframe
-                title="Hyderabad Location Map"
-                src="https://www.openstreetmap.org/export/embed.html?bbox=78.34%2C17.38%2C78.52%2C17.48&layer=mapnik"
+                title="India Location Map"
+                src="https://www.openstreetmap.org/export/embed.html?bbox=68.1%2C8.0%2C97.4%2C35.5&layer=mapnik"
                 className="w-full h-full border-0"
                 loading="lazy"
               />

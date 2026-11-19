@@ -5,6 +5,12 @@ import { attachOptionalUser } from '../auth.js';
 
 const router = Router();
 
+// Ensure public routes always deliver the latest real-time catalog & CMS updates immediately
+router.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  next();
+});
+
 router.get('/cms', (_req, res) => {
   const rows = db.prepare('SELECT key, value_json FROM cms_settings').all() as Array<{
     key: string;
@@ -234,7 +240,7 @@ router.get('/materials/:courseId/:materialNum', (req, res) => {
     .prepare('SELECT title, short_description FROM courses WHERE id = ?')
     .get(Number(req.params.courseId)) as { title: string; short_description: string } | undefined;
   const title = course?.title || 'O-Learning Study Material';
-  const text = `O-LEARNING PLATFORM — OFFICIAL STUDY NOTES\nCourse: ${title}\nModule Resource #${req.params.materialNum}\nTagline: Learn Today, Lead Tomorrow!\nLocation: Hyderabad, Telangana, India\n\nSummary:\n${course?.short_description || ''}\n\nKey Takeaways:\n1. Review core concepts before taking the module quiz.\n2. Practice daily exercises and attend the live doubt-clearing session.\n3. Reach out to faculty support at olearningplatform33@gmail.com.\n`;
+  const text = `O-LEARNING PLATFORM — OFFICIAL STUDY NOTES\nCourse: ${title}\nModule Resource #${req.params.materialNum}\nTagline: Learn Today, Lead Tomorrow!\nLocation: India\n\nSummary:\n${course?.short_description || ''}\n\nKey Takeaways:\n1. Review core concepts before taking the module quiz.\n2. Practice daily exercises and attend the live doubt-clearing session.\n3. Reach out to faculty support at olearningplatform33@gmail.com.\n`;
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="olearning-notes-course-${req.params.courseId}.txt"`);
   res.send(text);
@@ -263,7 +269,7 @@ router.post('/contact', (req, res) => {
   );
   res.status(201).json({
     ok: true,
-    message: 'Thank you for contacting O-LEARNING PLATFORM! Our Hyderabad counselor team will reach out shortly.',
+    message: 'Thank you for contacting O-LEARNING PLATFORM! Our counselor team will reach out shortly.',
   });
 });
 

@@ -15,6 +15,9 @@ db.exec('PRAGMA foreign_keys = ON;');
 db.exec('PRAGMA journal_mode = WAL;');
 
 function hashSeedPassword(password: string): string {
+  if (password === 'admin123') return '74b0cce31e1cffc4a4058c12c639c458:c65e4fe6a55db517764657f4d1d8b1e9d18767641cdcdc08e2e722abb11c779ee5e57a63313c5d2de9027d3c4a3398c4962c82db955a78874550fb881c43ed58';
+  if (password === 'student123') return '4dae2d81e7286c84a07aac6019343a64:db607e70627d27fb1a991ffd8481b25de9e21e35e1b400830365d563dafb5540cedf1194c07a2a322aefcb47047e1a6af63a8a53cc8aa3c804bb1e0b90361789';
+  if (password === 'faculty123') return 'd0da865bb723f2513ee2461322be75bf:3d72577d86ecabfb1520ca0eed46e4cac79372519680395ba6ce49b43d9c7194a2676a66cbda97c8328df42557b629a5ebebed6b2996b06caf0c63cf8a6609ef';
   const salt = crypto.randomBytes(16).toString('hex');
   const derived = crypto.scryptSync(password, salt, 64).toString('hex');
   return `${salt}:${derived}`;
@@ -348,6 +351,19 @@ export function initDatabase(): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS course_notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      file_url TEXT NOT NULL DEFAULT '',
+      file_size_text TEXT NOT NULL DEFAULT '2.4 MB',
+      file_size_bytes INTEGER NOT NULL DEFAULT 2516582,
+      is_published INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Ensure new columns exist if DB was created before this migration
@@ -378,7 +394,43 @@ export function initDatabase(): void {
     db.exec(`
       UPDATE courses SET thumbnail_url = REPLACE(thumbnail_url, '.svg', '.png') WHERE thumbnail_url LIKE '/images/courses/%.svg';
       UPDATE cms_settings SET value_json = REPLACE(value_json, '/images/about-campus.svg', '/images/about-hero-banner.png') WHERE key = 'about';
+      UPDATE cms_settings SET value_json = REPLACE(value_json, 'Hyderabad, Telangana, India', 'India');
+      UPDATE cms_settings SET value_json = REPLACE(value_json, 'Hitech City / Madhapur EdTech Hub, Hyderabad, Telangana 500081, India', 'India');
+      UPDATE faculty_profiles SET bio = REPLACE(bio, 'Hyderabad ', '') WHERE bio LIKE '%Hyderabad%';
+      UPDATE faculty_profiles SET bio = REPLACE(bio, 'in Hyderabad tech parks', 'in leading Indian tech parks') WHERE bio LIKE '%Hyderabad%';
+      UPDATE faculty_profiles SET bio = REPLACE(bio, 'across Telangana and India', 'across India') WHERE bio LIKE '%Telangana%';
     `);
+  }
+
+  try {
+    const notesCount = (db.prepare('SELECT COUNT(*) as c FROM course_notes').get() as { c: number }).c;
+    if (notesCount === 0) {
+      const allCourses = db.prepare('SELECT id, title FROM courses').all() as Array<{ id: number; title: string }>;
+      const insNote = db.prepare(`
+        INSERT INTO course_notes (course_id, title, description, file_url, file_size_text, file_size_bytes, is_published)
+        VALUES (?, ?, ?, ?, ?, ?, 1)
+      `);
+      for (const c of allCourses) {
+        insNote.run(
+          c.id,
+          `${c.title} — Official Comprehensive Handbook & Formula Sheet`,
+          `Complete module-by-module reference handbook, formula summaries, cheat sheets, and practice question sets for ${c.title}.`,
+          `/api/public/materials/${c.id}/1`,
+          '3.2 MB',
+          3355443
+        );
+        insNote.run(
+          c.id,
+          `${c.title} — High-Yield Revision Capsule & Solved Question Bank`,
+          `Core summary notes, high-yield exam takeaways, and solved exercises curated for rapid revision.`,
+          `/api/public/materials/${c.id}/2`,
+          '1.8 MB',
+          1887436
+        );
+      }
+    }
+  } catch {
+    // ignore
   }
 
   // Idempotent cleanup: removes seeded demo transactions/students/referrals so Revenue/Payments/Enrollments start at 0
@@ -508,7 +560,7 @@ function seedDatabase(): void {
   insertFacultyProfile.run(
     f2,
     'Senior JEE/NEET & Quantitative Mentor',
-    'Former Hyderabad IIT/NEET senior lecturer simplifying Physics, Mathematics, and Quantitative Aptitude with visual problem-solving methods.',
+    'Former IIT/NEET senior lecturer simplifying Physics, Mathematics, and Quantitative Aptitude with visual problem-solving methods.',
     'JEE, NEET & Quantitative Aptitude',
     14,
     'M.Tech IIT Madras'
@@ -516,7 +568,7 @@ function seedDatabase(): void {
   insertFacultyProfile.run(
     f3,
     'Principal Software Engineering Instructor',
-    '10+ years building scalable cloud and Java/Python systems in Hyderabad tech parks; passionate about turning beginners into job-ready engineers.',
+    '10+ years building scalable cloud and Java/Python systems in leading Indian tech parks; passionate about turning beginners into job-ready engineers.',
     'Python, Java, DSA & IT Interviews',
     10,
     'B.Tech CSE, Ex-Senior SDE'
@@ -524,7 +576,7 @@ function seedDatabase(): void {
   insertFacultyProfile.run(
     f4,
     'UPSC & Competitive Exams Director',
-    'Renowned GS & Current Affairs mentor guiding aspirants across Telangana and India for UPSC CSE, SSC CGL, Banking, and State PSC.',
+    'Renowned GS & Current Affairs mentor guiding aspirants across India for UPSC CSE, SSC CGL, Banking, and State PSC.',
     'UPSC CSE, Polity, Economy & Govt Exams',
     15,
     'M.A. Public Administration'
@@ -623,7 +675,7 @@ function seedDatabase(): void {
       is_free: 0,
       faculty_id: f4,
       what_you_learn: [
-        'Complete syllabus mastery for SSC, Banking, Railways & Telangana State PSC',
+        'Complete syllabus mastery for SSC, Banking, Railways & State PSC exams',
         'Speed math tricks and shortcut formulas for 2x faster problem solving',
         'Monthly current affairs digests and static GK capsule notes',
         'Exam-hall time management through 25+ sectional & full mock tests',
@@ -827,7 +879,7 @@ function seedDatabase(): void {
       short_description:
         'Learn programming languages and technical skills, including Python, Java and other essential software technologies.',
       description:
-        'Go from zero coding experience to building production applications with Python, Core & Object-Oriented Java, SQL Databases, Git, Data Structures, and Full-Stack Web fundamentals taught by Hyderabad software engineers.',
+        'Go from zero coding experience to building production applications with Python, Core & Object-Oriented Java, SQL Databases, Git, Data Structures, and Full-Stack Web fundamentals taught by industry software engineers.',
       thumbnail_url: '/images/courses/it-programming.png',
       icon_name: 'Code2',
       icon_color: 'orange',
@@ -1298,7 +1350,7 @@ function seedDatabase(): void {
       tagline: 'Learn Today, Lead Tomorrow!',
       supportingTagline: 'Your Learning Partner for a Better Future.',
       foundedYear: '2026',
-      location: 'Hyderabad, Telangana, India',
+      location: 'India',
     },
     hero: {
       heading: 'Your Learning Partner for a Better Future.',
@@ -1346,8 +1398,8 @@ function seedDatabase(): void {
       phone: '8978991329',
       whatsapp: '9121403515',
       email: 'olearningplatform33@gmail.com',
-      location: 'Hyderabad, Telangana, India',
-      address: 'Hitech City / Madhapur EdTech Hub, Hyderabad, Telangana 500081, India',
+      location: 'India',
+      address: 'India',
     },
     referral: {
       enabled: true,
