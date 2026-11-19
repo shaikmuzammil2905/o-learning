@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { subscribePlatformUpdates } from '../lib/realtime';
-import type { Batch, Category, CmsSettings, Course, SubscriptionPlan, TestItem } from '../types';
+import type { Batch, Category, CmsSettings, Course, PdfResource, SubscriptionPlan, TestItem, VideoResource } from '../types';
 
 const DEFAULT_CMS: CmsSettings = {
   brand: {
@@ -59,6 +59,12 @@ const DEFAULT_CMS: CmsSettings = {
     email: 'olearningplatform33@gmail.com',
     location: 'India',
     address: 'India',
+  },
+  socials: {
+    facebook: 'https://www.facebook.com/share/1A4BFwTDa4/',
+    youtube: 'https://youtube.com/@olearningplatform?si=YbsPm35pmp8z_UiP',
+    instagram: 'https://www.instagram.com/olearningplatform33?avpt=MWJid3M2bXM1azgxeQ==',
+    instagramSecondary: 'https://www.instagram.com/olearningplatform?fqnt=MWgxc2g4YnZueWs4Ng==',
   },
   referral: {
     rewardAmount: 250,
@@ -278,6 +284,85 @@ const DEFAULT_COURSES: Course[] = [
   },
 ];
 
+const DEFAULT_PDFS: PdfResource[] = [
+  {
+    id: 1,
+    title: 'Future Forms - Will and Going To (Practice Worksheet)',
+    description:
+      'Comprehensive grammar practice worksheet covering Future Forms, Will vs Going To rules, sentence structures, and test exercises with answer keys.',
+    category: 'Spoken English & Grammar',
+    file_url:
+      'https://o-learning-platform-media-2026.s3.ap-southeast-2.amazonaws.com/uploads/1795100996750-Future-Forms-Practice-Worksheet.pdf',
+    thumbnail_url: '/images/courses/spoken-english.png',
+    file_size_text: '118 KB',
+    display_order: 1,
+    is_published: 1,
+    created_at: '2026-11-19T15:00:00.000Z',
+    updated_at: '2026-11-19T15:00:00.000Z',
+  },
+  {
+    id: 2,
+    title: 'Quantitative Aptitude & Speed Math Formula Handbook',
+    description:
+      'Handy formula cheat sheet with Vedic math tricks, percentage-fraction tables, and shortcuts for competitive exam aspirants.',
+    category: 'Competitive Exams',
+    file_url: '/api/public/materials/2/1',
+    thumbnail_url: '/images/courses/competitive-exams.png',
+    file_size_text: '2.4 MB',
+    display_order: 2,
+    is_published: 1,
+    created_at: '2026-11-19T15:00:00.000Z',
+    updated_at: '2026-11-19T15:00:00.000Z',
+  },
+  {
+    id: 3,
+    title: 'Python & Full-Stack Web Architecture Cheat Sheet',
+    description:
+      'Essential Python syntax, OOP concepts, SQL queries, and REST API conventions formatted for quick interview and lab reference.',
+    category: 'IT & Software',
+    file_url: '/api/public/materials/7/1',
+    thumbnail_url: '/images/courses/it-programming.png',
+    file_size_text: '3.1 MB',
+    display_order: 3,
+    is_published: 1,
+    created_at: '2026-11-19T15:00:00.000Z',
+    updated_at: '2026-11-19T15:00:00.000Z',
+  },
+];
+
+const DEFAULT_VIDEOS: VideoResource[] = [
+  {
+    id: 1,
+    title: 'Welcome to O-Learning Platform — Learning Partner for a Better Future',
+    description:
+      'Experience how O-Learning Platform empowers Indian learners with expert-led live classes, structured HD lecture recordings, downloadable study notes, and outcome-oriented mentorship.',
+    video_url: '/videos/platform-intro.mp4',
+    thumbnail_url: '/images/hero-desktop-bg.png',
+    category: 'Platform Tour & Classroom Experience',
+    placement: 'homepage_featured',
+    duration_text: '00:45',
+    display_order: 1,
+    is_published: 1,
+    created_at: '2026-11-19T15:00:00.000Z',
+    updated_at: '2026-11-19T15:00:00.000Z',
+  },
+  {
+    id: 2,
+    title: 'Live Class Demo: Spoken English & Pronunciation Mastery',
+    description:
+      'Sample interactive class walkthrough covering everyday conversation clubs, fluency drills, and accent neutralization.',
+    video_url: '/videos/platform-intro.mp4',
+    thumbnail_url: '/images/courses/spoken-english.png',
+    category: 'Classroom Demo',
+    placement: 'homepage_section',
+    duration_text: '00:45',
+    display_order: 2,
+    is_published: 1,
+    created_at: '2026-11-19T15:00:00.000Z',
+    updated_at: '2026-11-19T15:00:00.000Z',
+  },
+];
+
 interface SiteContextValue {
   cms: CmsSettings;
   courses: Course[];
@@ -285,6 +370,8 @@ interface SiteContextValue {
   plans: SubscriptionPlan[];
   tests: TestItem[];
   batches: Batch[];
+  pdfs: PdfResource[];
+  videos: VideoResource[];
   loading: boolean;
   refreshSite: () => Promise<void>;
 }
@@ -325,17 +412,43 @@ export function SiteProvider({ children }: { children: React.ReactNode }) {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [tests, setTests] = useState<TestItem[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [pdfs, setPdfs] = useState<PdfResource[]>(() => {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('olearn_cached_pdfs');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        } catch {}
+      }
+    }
+    return DEFAULT_PDFS;
+  });
+  const [videos, setVideos] = useState<VideoResource[]>(() => {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('olearn_cached_videos');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        } catch {}
+      }
+    }
+    return DEFAULT_VIDEOS;
+  });
   const [loading, setLoading] = useState(false);
 
   const refreshSite = useCallback(async () => {
     try {
-      const [cmsData, coursesData, catsData, plansData, testsData, batchesData] = await Promise.all([
+      const [cmsData, coursesData, catsData, plansData, testsData, batchesData, pdfsData, videosData] = await Promise.all([
         api<Partial<CmsSettings>>('/api/public/cms'),
         api<Course[]>('/api/public/courses'),
         api<Category[]>('/api/public/categories'),
         api<SubscriptionPlan[]>('/api/public/plans'),
         api<TestItem[]>('/api/public/tests'),
         api<Batch[]>('/api/public/batches'),
+        api<PdfResource[]>('/api/public/pdfs').catch(() => DEFAULT_PDFS),
+        api<VideoResource[]>('/api/public/videos').catch(() => DEFAULT_VIDEOS),
       ]);
       if (cmsData && typeof cmsData === 'object') {
         setCms((prev) => {
@@ -360,6 +473,22 @@ export function SiteProvider({ children }: { children: React.ReactNode }) {
       setPlans(Array.isArray(plansData) ? plansData : []);
       setTests(Array.isArray(testsData) ? testsData : []);
       setBatches(Array.isArray(batchesData) ? batchesData : []);
+      if (Array.isArray(pdfsData) && pdfsData.length > 0) {
+        setPdfs(pdfsData);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('olearn_cached_pdfs', JSON.stringify(pdfsData));
+          } catch {}
+        }
+      }
+      if (Array.isArray(videosData) && videosData.length > 0) {
+        setVideos(videosData);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('olearn_cached_videos', JSON.stringify(videosData));
+          } catch {}
+        }
+      }
     } catch {
       // Keep current database-synced state on transient network failure
     } finally {
@@ -377,7 +506,7 @@ export function SiteProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <SiteContext.Provider
-      value={{ cms, courses, categories, plans, tests, batches, loading, refreshSite }}
+      value={{ cms, courses, categories, plans, tests, batches, pdfs, videos, loading, refreshSite }}
     >
       {children}
     </SiteContext.Provider>

@@ -12,6 +12,8 @@ data/
 *.csv
 ec2-server.js
 image copy *.png
+WhatsApp Video *.mp4
+Future Forms *.pdf
 
 
 

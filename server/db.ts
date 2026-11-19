@@ -364,6 +364,35 @@ export function initDatabase(): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS pdfs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      category TEXT NOT NULL DEFAULT 'Worksheets & Notes',
+      file_url TEXT NOT NULL,
+      thumbnail_url TEXT NOT NULL DEFAULT '',
+      file_size_text TEXT NOT NULL DEFAULT '118 KB',
+      display_order INTEGER NOT NULL DEFAULT 1,
+      is_published INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS videos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      video_url TEXT NOT NULL,
+      thumbnail_url TEXT NOT NULL DEFAULT '',
+      category TEXT NOT NULL DEFAULT 'Featured Overview',
+      placement TEXT NOT NULL CHECK (placement IN ('homepage_featured', 'homepage_section', 'dedicated_section')) DEFAULT 'homepage_featured',
+      duration_text TEXT NOT NULL DEFAULT '02:15',
+      display_order INTEGER NOT NULL DEFAULT 1,
+      is_published INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Ensure new columns exist if DB was created before this migration
@@ -428,6 +457,77 @@ export function initDatabase(): void {
           1887436
         );
       }
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    const pdfCount = (db.prepare('SELECT COUNT(*) as c FROM pdfs').get() as { c: number }).c;
+    if (pdfCount === 0) {
+      const insPdf = db.prepare(`
+        INSERT INTO pdfs (title, description, category, file_url, thumbnail_url, file_size_text, display_order, is_published)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+      `);
+      insPdf.run(
+        'Future Forms - Will and Going To (Practice Worksheet)',
+        'Comprehensive grammar practice worksheet covering Future Forms, Will vs Going To rules, sentence structures, and test exercises with answer keys.',
+        'Spoken English & Grammar',
+        'https://o-learning-platform-media-2026.s3.ap-southeast-2.amazonaws.com/uploads/1795100996750-Future-Forms-Practice-Worksheet.pdf',
+        '/images/courses/spoken-english.png',
+        '118 KB',
+        1
+      );
+      insPdf.run(
+        'Quantitative Aptitude & Speed Math Formula Handbook',
+        'Handy formula cheat sheet with Vedic math tricks, percentage-fraction tables, and shortcuts for competitive exam aspirants.',
+        'Competitive Exams',
+        '/api/public/materials/2/1',
+        '/images/courses/competitive-exams.png',
+        '2.4 MB',
+        2
+      );
+      insPdf.run(
+        'Python & Full-Stack Web Architecture Cheat Sheet',
+        'Essential Python syntax, OOP concepts, SQL queries, and REST API conventions formatted for quick interview and lab reference.',
+        'IT & Software',
+        '/api/public/materials/7/1',
+        '/images/courses/it-programming.png',
+        '3.1 MB',
+        3
+      );
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    const videoCount = (db.prepare('SELECT COUNT(*) as c FROM videos').get() as { c: number }).c;
+    if (videoCount === 0) {
+      const insVideo = db.prepare(`
+        INSERT INTO videos (title, description, video_url, thumbnail_url, category, placement, duration_text, display_order, is_published)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+      `);
+      insVideo.run(
+        'Welcome to O-Learning Platform — Learning Partner for a Better Future',
+        'Experience how O-Learning Platform empowers Indian learners with expert-led live classes, structured HD lecture recordings, downloadable study notes, and outcome-oriented mentorship.',
+        '/videos/platform-intro.mp4',
+        '/images/hero-desktop-bg.png',
+        'Platform Tour & Classroom Experience',
+        'homepage_featured',
+        '00:45',
+        1
+      );
+      insVideo.run(
+        'Live Class Demo: Spoken English & Pronunciation Mastery',
+        'Sample interactive class walkthrough covering everyday conversation clubs, fluency drills, and accent neutralization.',
+        '/videos/platform-intro.mp4',
+        '/images/courses/spoken-english.png',
+        'Classroom Demo',
+        'homepage_section',
+        '00:45',
+        2
+      );
     }
   } catch {
     // ignore
@@ -1400,6 +1500,12 @@ function seedDatabase(): void {
       email: 'olearningplatform33@gmail.com',
       location: 'India',
       address: 'India',
+    },
+    socials: {
+      facebook: 'https://www.facebook.com/share/1A4BFwTDa4/',
+      youtube: 'https://youtube.com/@olearningplatform?si=YbsPm35pmp8z_UiP',
+      instagram: 'https://www.instagram.com/olearningplatform33?avpt=MWJid3M2bXM1azgxeQ==',
+      instagramSecondary: 'https://www.instagram.com/olearningplatform?fqnt=MWgxc2g4YnZueWs4Ng==',
     },
     referral: {
       enabled: true,

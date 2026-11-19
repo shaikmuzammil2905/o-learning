@@ -360,6 +360,22 @@ export default function App() {
                 </RequireRole>
               }
             />
+            <Route
+              path="/admin/pdfs"
+              element={
+                <RequireRole roles={['admin']}>
+                  <AdminPortal section="pdfs" />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/videos"
+              element={
+                <RequireRole roles={['admin']}>
+                  <AdminPortal section="videos" />
+                </RequireRole>
+              }
+            />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

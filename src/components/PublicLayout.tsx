@@ -227,19 +227,38 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <p className="text-sm font-bold text-[#FF9B3D] mt-4">Follow Us:</p>
               <div className="flex items-center gap-2.5 mt-2.5">
                 {[
-                  { label: 'Facebook', bg: 'bg-[#1877F2]', text: 'f', href: '#facebook' },
-                  { label: 'YouTube', bg: 'bg-[#FF0000]', text: '▶', href: '#youtube' },
-                  { label: 'Instagram', bg: 'bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF]', text: '◎', href: '#instagram' },
-                  { label: 'LinkedIn', bg: 'bg-[#0A66C2]', text: 'in', href: '#linkedin' },
+                  {
+                    label: 'Facebook',
+                    bg: 'bg-[#1877F2]',
+                    text: 'f',
+                    href: cms.socials?.facebook || 'https://www.facebook.com/share/1A4BFwTDa4/',
+                  },
+                  {
+                    label: 'YouTube',
+                    bg: 'bg-[#FF0000]',
+                    text: '▶',
+                    href: cms.socials?.youtube || 'https://youtube.com/@olearningplatform?si=YbsPm35pmp8z_UiP',
+                  },
+                  {
+                    label: 'Instagram (Official)',
+                    bg: 'bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF]',
+                    text: '◎',
+                    href: cms.socials?.instagram || 'https://www.instagram.com/olearningplatform33?avpt=MWJid3M2bXM1azgxeQ==',
+                  },
+                  {
+                    label: 'Instagram (Community)',
+                    bg: 'bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF]',
+                    text: 'IG',
+                    href: cms.socials?.instagramSecondary || 'https://www.instagram.com/olearningplatform?fqnt=MWgxc2g4YnZueWs4Ng==',
+                  },
                 ].map((s) => (
                   <a
                     key={s.label}
                     href={s.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     aria-label={s.label}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigate('/contact');
-                    }}
+                    title={s.label}
                     className={`w-9 h-9 rounded-full ${s.bg} text-white text-xs font-bold flex items-center justify-center shadow-md ring-2 ring-white/20 hover:scale-110 transition`}
                   >
                     {s.text}

@@ -215,10 +215,45 @@ export interface CmsSettings {
     location: string;
     address: string;
   };
+  socials?: {
+    facebook: string;
+    youtube: string;
+    instagram: string;
+    instagramSecondary?: string;
+  };
   referral: {
     rewardAmount: number;
     discountPercent: number;
     headline: string;
   };
+}
+
+export interface PdfResource {
+  id: number;
+  title: string;
+  description: string;
+  category: string;
+  file_url: string;
+  thumbnail_url: string;
+  file_size_text: string;
+  display_order: number;
+  is_published: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VideoResource {
+  id: number;
+  title: string;
+  description: string;
+  video_url: string;
+  thumbnail_url: string;
+  category: string;
+  placement: 'homepage_featured' | 'homepage_section' | 'dedicated_section';
+  duration_text: string;
+  display_order: number;
+  is_published: number;
+  created_at: string;
+  updated_at: string;
 }
 

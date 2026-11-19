@@ -8,6 +8,9 @@ import {
   Check,
   CheckCircle2,
   ClipboardCheck,
+  Download,
+  Eye,
+  FileText,
   Headphones,
   Info,
   Laptop,
@@ -26,6 +29,7 @@ import { AnimatedCounter, RevealOnScroll } from '../../components/ui/Animations'
 import { useSite } from '../../context/SiteContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency } from '../../lib/api';
+import type { PdfResource } from '../../types';
 
 const STAT_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   BookOpen,
@@ -158,11 +162,14 @@ const WHY_CHOOSE_ITEMS = [
 ];
 
 export function HomePage() {
-  const { cms, courses } = useSite();
+  const { cms, courses, pdfs, videos } = useSite();
   const { user } = useAuth();
   const [mobileSearch, setMobileSearch] = useState('');
   const [whyPopup, setWhyPopup] = useState<(typeof WHY_CHOOSE_ITEMS)[number] | null>(null);
+  const [previewPdf, setPreviewPdf] = useState<PdfResource | null>(null);
   const navigate = useNavigate();
+
+  const featuredVideo = videos.find((v) => v.placement === 'homepage_featured') || videos[0];
 
   const handleMobileSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -379,6 +386,64 @@ export function HomePage() {
         )}
       </section>
 
+      {/* ================= FEATURED VIDEO & CLASS EXPERIENCE (WhatsApp Video & Playable Player) ================= */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        <RevealOnScroll>
+          <div className="bg-gradient-to-br from-[#001F5C] via-[#00338D] to-[#0052CC] rounded-3xl p-6 sm:p-10 text-white shadow-2xl relative overflow-hidden border border-blue-400/20">
+            <div className="absolute -right-20 -bottom-20 w-80 h-80 rounded-full bg-[#FF7A00]/15 blur-3xl pointer-events-none" />
+
+            <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-12 relative z-10">
+              {/* Playable Video Player */}
+              <div className="w-full lg:w-7/12">
+                <div className="relative aspect-video rounded-2xl overflow-hidden bg-slate-950 shadow-2xl border-2 border-white/20 group">
+                  <video
+                    src={featuredVideo?.video_url || '/videos/platform-intro.mp4'}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    poster={featuredVideo?.thumbnail_url || '/images/hero-desktop-bg.png'}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-[11px] font-bold flex items-center gap-1.5 pointer-events-none">
+                    <span className="w-2 h-2 rounded-full bg-[#FF7A00] animate-pulse" />
+                    Featured Class Demo
+                  </div>
+                </div>
+              </div>
+
+              {/* Video Info & CTAs */}
+              <div className="w-full lg:w-5/12 space-y-4">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FF7A00] text-white text-xs font-bold uppercase tracking-wider shadow">
+                  <Play className="w-3.5 h-3.5 fill-white" /> Class Experience
+                </span>
+                <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-white leading-tight">
+                  {featuredVideo?.title || 'Experience How Learning Happens at O-Learning'}
+                </h2>
+                <p className="text-sm text-blue-100 leading-relaxed">
+                  {featuredVideo?.description ||
+                    'Watch our interactive classroom walkthrough. See how expert faculty break down complex topics into simple, practical steps with real-time doubts, formula breakdowns, and live practice.'}
+                </p>
+
+                <div className="pt-2 flex flex-wrap items-center gap-3">
+                  <Link
+                    to="/courses"
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#FF7A00] hover:bg-[#E66D00] text-white font-bold text-xs sm:text-sm shadow-lg shadow-orange-600/30 transition"
+                  >
+                    Explore Courses <ArrowRight className="w-4 h-4" />
+                  </Link>
+                  <Link
+                    to="/batches"
+                    className="inline-flex items-center gap-2 px-5 py-3 rounded-full border border-white/80 hover:bg-white hover:text-[#00338D] text-white font-bold text-xs sm:text-sm transition"
+                  >
+                    View Live Batches
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </RevealOnScroll>
+      </section>
+
       {/* ================= LEARN ANYWHERE, ANYTIME BANNER ================= */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <RevealOnScroll>
@@ -417,6 +482,80 @@ export function HomePage() {
             </div>
           </div>
         </RevealOnScroll>
+      </section>
+
+      {/* ================= PDF RESOURCES & STUDY MATERIALS (Master Prompt Requirement) ================= */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="flex items-end justify-between gap-4 mb-7">
+          <div>
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#FF7A00] mb-1">
+              <FileText className="w-4 h-4" /> Downloadable Worksheets & Handbooks
+            </div>
+            <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-[#002B7A]">
+              PDF Resources & Practice Sheets
+            </h2>
+            <div className="w-16 h-1 rounded-full bg-[#FF7A00] mt-2" />
+          </div>
+          <Link
+            to="/courses"
+            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-[#0052CC] hover:text-[#FF7A00] transition"
+          >
+            Explore All Courses <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {pdfs.map((pdf) => (
+            <div
+              key={pdf.id}
+              className="bg-white rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 p-6 flex flex-col justify-between"
+            >
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="px-3 py-1 rounded-full bg-blue-50 text-[#0052CC] text-[11px] font-bold">
+                    {pdf.category}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-lg bg-orange-50 text-[#FF7A00] text-[11px] font-bold border border-orange-200/60">
+                    {pdf.file_size_text || '118 KB'}
+                  </span>
+                </div>
+
+                <div className="flex items-start gap-3 pt-1">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#00338D] to-[#0052CC] text-white flex items-center justify-center shrink-0 shadow-md">
+                    <FileText className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-display font-bold text-base text-[#0F172A] leading-snug">
+                      {pdf.title}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                      {pdf.description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-5 mt-4 border-t border-slate-100 flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setPreviewPdf(pdf)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 hover:border-[#0052CC] text-[#0052CC] hover:bg-blue-50/50 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Eye className="w-4 h-4" /> View PDF
+                </button>
+                <a
+                  href={pdf.file_url}
+                  download
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 py-2.5 rounded-xl bg-[#0052CC] hover:bg-[#003EB3] text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <Download className="w-4 h-4" /> Download PDF
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* ================= WHY CHOOSE O-LEARNING PLATFORM (Enriched Interactive Popups) ================= */}
@@ -528,6 +667,62 @@ export function HomePage() {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PDF VIEWER MODAL (Master Prompt Requirement) */}
+      {previewPdf && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-xs p-3 sm:p-6"
+          onClick={() => setPreviewPdf(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-4xl w-full h-[88vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#FF7A00] flex items-center justify-center shrink-0">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-display font-bold text-sm sm:text-base text-[#0F172A] truncate">
+                    {previewPdf.title}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {previewPdf.category} · {previewPdf.file_size_text}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewPdf.file_url}
+                  download
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0052CC] text-white text-xs font-bold hover:bg-[#003EB3] shadow-sm transition"
+                >
+                  <Download className="w-3.5 h-3.5" /> Download
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewPdf(null)}
+                  className="p-2 rounded-xl hover:bg-slate-200 text-slate-500 hover:text-slate-800 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 bg-slate-100 p-2 sm:p-4">
+              <iframe
+                src={previewPdf.file_url}
+                title={previewPdf.title}
+                className="w-full h-full rounded-2xl border border-slate-300 bg-white"
+              />
             </div>
           </div>
         </div>

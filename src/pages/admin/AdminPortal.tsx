@@ -9,9 +9,11 @@ import {
   ClipboardCheck,
   Copy,
   CreditCard,
+  Download,
   Edit3,
   ExternalLink,
   Eye,
+  FileText,
   FolderKanban,
   Gift,
   IndianRupee,
@@ -26,8 +28,10 @@ import {
   ShieldCheck,
   Star,
   Trash2,
+  UploadCloud,
   UserCheck,
   Users,
+  Video,
   Wallet,
   X,
 } from 'lucide-react';
@@ -39,10 +43,13 @@ import { ImageUploader } from '../../components/admin/ImageUploader';
 import { api } from '../../lib/api';
 import { broadcastPlatformUpdate, subscribePlatformUpdates } from '../../lib/realtime';
 import { useSite } from '../../context/SiteContext';
+import type { PdfResource, VideoResource } from '../../types';
 
 export const ADMIN_LINKS: SidebarLink[] = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/admin/courses', label: 'Courses', icon: BookOpen },
+  { to: '/admin/pdfs', label: 'PDF Management', icon: FileText },
+  { to: '/admin/videos', label: 'Video Management', icon: Video },
   { to: '/admin/quizzes', label: 'Quizzes', icon: ClipboardCheck },
   { to: '/admin/categories', label: 'Categories', icon: FolderKanban },
   { to: '/admin/users', label: 'Users', icon: Users },
@@ -50,12 +57,14 @@ export const ADMIN_LINKS: SidebarLink[] = [
   { to: '/admin/payments', label: 'Payments', icon: CreditCard },
   { to: '/admin/referrals', label: 'Referrals', icon: Gift },
   { to: '/admin/redemptions', label: 'Redemptions', icon: Wallet },
-  { to: '/admin/settings', label: 'Settings', icon: Settings },
+  { to: '/admin/settings', label: 'Settings & CMS', icon: Settings },
 ];
 
 export type AdminSection =
   | 'overview'
   | 'courses'
+  | 'pdfs'
+  | 'videos'
   | 'quizzes'
   | 'categories'
   | 'users'
@@ -215,6 +224,17 @@ export function AdminPortal({ section }: { section: AdminSection }) {
   const [enquiries, setEnquiries] = useState<Array<Record<string, unknown>>>([]);
   const [cms, setCms] = useState<Record<string, any> | null>(null);
 
+  // PDF & Video Resources states
+  const [adminPdfs, setAdminPdfs] = useState<PdfResource[]>([]);
+  const [adminVideos, setAdminVideos] = useState<VideoResource[]>([]);
+  const [pdfSearch, setPdfSearch] = useState('');
+  const [videoSearch, setVideoSearch] = useState('');
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [editingPdf, setEditingPdf] = useState<Partial<PdfResource> | null>(null);
+  const [videoModalOpen, setVideoModalOpen] = useState(false);
+  const [editingVideo, setEditingVideo] = useState<Partial<VideoResource> | null>(null);
+  const [isUploadingAsset, setIsUploadingAsset] = useState(false);
+
   // Filters & Modals
   const [courseSearch, setCourseSearch] = useState('');
   const [courseCatFilter, setCourseCatFilter] = useState('all');
@@ -307,6 +327,10 @@ export function AdminPortal({ section }: { section: AdminSection }) {
         setEnquiries(enqs);
       } else if (normalizedSection === 'quizzes') {
         setQuizzes(await api<QuizRow[]>('/api/admin/tests'));
+      } else if (normalizedSection === 'pdfs') {
+        setAdminPdfs(await api<PdfResource[]>('/api/admin/pdfs').catch(() => []));
+      } else if (normalizedSection === 'videos') {
+        setAdminVideos(await api<VideoResource[]>('/api/admin/videos').catch(() => []));
       } else if (normalizedSection === 'users') {
         setUsersList(await api<Array<Record<string, unknown>>>('/api/admin/users'));
       } else if (normalizedSection === 'certificates') {
@@ -461,9 +485,165 @@ export function AdminPortal({ section }: { section: AdminSection }) {
     notify('Platform settings & live CMS saved.');
   };
 
+  const uploadFileToS3 = async (file: File): Promise<string> => {
+    setIsUploadingAsset(true);
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const dataUrl = reader.result as string;
+          const ec2Url = (import.meta as any).env?.VITE_EC2_BACKEND_URL || 'http://3.27.28.199:5000';
+          const res = await fetch(`${ec2Url}/api/upload`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: file.name,
+              contentType: file.type || 'application/octet-stream',
+              dataUrl,
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.url) {
+              setIsUploadingAsset(false);
+              return resolve(data.url);
+            }
+          }
+          setIsUploadingAsset(false);
+          resolve(dataUrl);
+        } catch {
+          setIsUploadingAsset(false);
+          resolve(reader.result as string);
+        }
+      };
+      reader.onerror = (err) => {
+        setIsUploadingAsset(false);
+        reject(err);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleSavePdf = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPdf || !editingPdf.title || !editingPdf.file_url) {
+      alert('Please enter a title and provide/upload a valid PDF file.');
+      return;
+    }
+    const payload = {
+      title: editingPdf.title,
+      description: editingPdf.description || '',
+      category: editingPdf.category || 'General',
+      file_url: editingPdf.file_url,
+      thumbnail_url: editingPdf.thumbnail_url || '',
+      file_size: editingPdf.file_size || '120 KB',
+      display_order: Number(editingPdf.display_order) || 0,
+      is_published: editingPdf.is_published ? 1 : 0,
+      course_id: editingPdf.course_id || null,
+    };
+    if (editingPdf.id) {
+      await api('/api/admin/pdfs', {
+        method: 'PUT',
+        body: JSON.stringify({ id: editingPdf.id, ...payload }),
+      });
+      notify('PDF resource updated.');
+    } else {
+      await api('/api/admin/pdfs', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      notify('New PDF resource added and published.');
+    }
+    setPdfModalOpen(false);
+    setEditingPdf(null);
+    refreshPublicSite();
+    broadcastPlatformUpdate('cms');
+    loadData(true);
+  };
+
+  const handleDeletePdf = async (id: number) => {
+    if (!window.confirm('Delete this PDF resource permanently?')) return;
+    await api(`/api/admin/pdfs?id=${id}`, { method: 'DELETE' });
+    notify('PDF resource deleted.');
+    refreshPublicSite();
+    broadcastPlatformUpdate('cms');
+    loadData(true);
+  };
+
+  const handleTogglePdfPublish = async (pdf: PdfResource) => {
+    await api('/api/admin/pdfs', {
+      method: 'PUT',
+      body: JSON.stringify({ id: pdf.id, is_published: pdf.is_published ? 0 : 1 }),
+    });
+    notify(pdf.is_published ? 'PDF unpublished from student site.' : 'PDF published to live site.');
+    refreshPublicSite();
+    broadcastPlatformUpdate('cms');
+    loadData(true);
+  };
+
+  const handleSaveVideo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingVideo || !editingVideo.title || !editingVideo.video_url) {
+      alert('Please enter a video title and provide/upload a video URL.');
+      return;
+    }
+    const payload = {
+      title: editingVideo.title,
+      description: editingVideo.description || '',
+      category: editingVideo.category || 'Demo',
+      video_url: editingVideo.video_url,
+      thumbnail_url: editingVideo.thumbnail_url || '',
+      placement: editingVideo.placement || 'homepage_featured',
+      duration: editingVideo.duration || '5:00',
+      display_order: Number(editingVideo.display_order) || 0,
+      is_published: editingVideo.is_published ? 1 : 0,
+      course_id: editingVideo.course_id || null,
+    };
+    if (editingVideo.id) {
+      await api('/api/admin/videos', {
+        method: 'PUT',
+        body: JSON.stringify({ id: editingVideo.id, ...payload }),
+      });
+      notify('Video resource updated.');
+    } else {
+      await api('/api/admin/videos', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      notify('New video added and published.');
+    }
+    setVideoModalOpen(false);
+    setEditingVideo(null);
+    refreshPublicSite();
+    broadcastPlatformUpdate('cms');
+    loadData(true);
+  };
+
+  const handleDeleteVideo = async (id: number) => {
+    if (!window.confirm('Delete this video permanently?')) return;
+    await api(`/api/admin/videos?id=${id}`, { method: 'DELETE' });
+    notify('Video deleted.');
+    refreshPublicSite();
+    broadcastPlatformUpdate('cms');
+    loadData(true);
+  };
+
+  const handleToggleVideoPublish = async (v: VideoResource) => {
+    await api('/api/admin/videos', {
+      method: 'PUT',
+      body: JSON.stringify({ id: v.id, is_published: v.is_published ? 0 : 1 }),
+    });
+    notify(v.is_published ? 'Video unpublished from live site.' : 'Video published to live site.');
+    refreshPublicSite();
+    broadcastPlatformUpdate('cms');
+    loadData(true);
+  };
+
   const titles: Record<AdminSection, { title: string; subtitle: string }> = {
     overview: { title: 'Admin Dashboard', subtitle: 'Real-time platform analytics, enrollments & revenue overview' },
     courses: { title: 'Course Management', subtitle: 'Manage curriculum, pricing, media assets & publication status' },
+    pdfs: { title: 'PDF Resources Management', subtitle: 'Upload worksheets, study notes, preview & sync live to students' },
+    videos: { title: 'Video & Media Management', subtitle: 'Upload class recordings, homepage demo videos & set placements' },
     quizzes: { title: 'Quiz & Assessment Studio', subtitle: 'Configure mock tests, pricing, certificates & MCQ banks' },
     categories: { title: 'Course Categories', subtitle: 'Organize catalog taxonomy & category imagery' },
     users: { title: 'Users & Access Control', subtitle: 'Students, faculty, admins, roles & wallet credits' },
@@ -935,6 +1115,320 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* PDF RESOURCES MANAGEMENT */}
+          {normalizedSection === 'pdfs' && (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-slate-400">
+                  Upload worksheets, lecture notes, syllabus, and practice PDFs. All published PDFs sync directly to student dashboards and the public website.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingPdf({
+                      title: '',
+                      description: '',
+                      category: 'Worksheet',
+                      file_url: '',
+                      file_size: '',
+                      display_order: adminPdfs.length + 1,
+                      is_published: 1,
+                    });
+                    setPdfModalOpen(true);
+                  }}
+                  className={btnPrimary}
+                >
+                  <Plus className="h-4 w-4" /> Upload New PDF
+                </button>
+              </div>
+
+              {/* PDF Search */}
+              <div className="flex flex-wrap gap-3">
+                <div className="relative flex-1 min-w-[240px]">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <input
+                    value={pdfSearch}
+                    onChange={(e) => setPdfSearch(e.target.value)}
+                    placeholder="Search PDFs by title, category, or notes..."
+                    className={`${inputCls} pl-10`}
+                  />
+                </div>
+              </div>
+
+              {/* PDF Cards Table */}
+              <div className={`${cardCls} overflow-hidden`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="border-b border-slate-800 bg-slate-900/40 text-slate-400 uppercase tracking-wider font-semibold">
+                      <tr>
+                        <th className="px-5 py-3.5">PDF Document</th>
+                        <th className="px-5 py-3.5">Category</th>
+                        <th className="px-5 py-3.5">File Size</th>
+                        <th className="px-5 py-3.5">Status</th>
+                        <th className="px-5 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {adminPdfs
+                        .filter((p) =>
+                          pdfSearch
+                            ? p.title.toLowerCase().includes(pdfSearch.toLowerCase()) ||
+                              (p.category && p.category.toLowerCase().includes(pdfSearch.toLowerCase()))
+                            : true
+                        )
+                        .map((pdf) => (
+                          <tr key={pdf.id} className="hover:bg-slate-800/30 transition-colors">
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+                                  <FileText className="h-5 w-5 text-red-400" />
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className="font-bold text-white text-sm truncate">{pdf.title}</h4>
+                                  <p className="text-slate-400 text-xs line-clamp-1 mt-0.5">{pdf.description || 'No description provided'}</p>
+                                  {pdf.file_url.includes('s3') && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-semibold mt-1">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span> AWS S3 Cloud Stored
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className="rounded-lg bg-slate-800 px-2.5 py-1 text-slate-300 font-medium">
+                                {pdf.category || 'General'}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-slate-400 font-mono">
+                              {pdf.file_size || '120 KB'}
+                            </td>
+                            <td className="px-5 py-4">
+                              <button
+                                type="button"
+                                onClick={() => handleTogglePdfPublish(pdf)}
+                                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold cursor-pointer transition-all ${
+                                  pdf.is_published
+                                    ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
+                                    : 'bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25'
+                                }`}
+                              >
+                                {pdf.is_published ? (
+                                  <>
+                                    <CheckCircle2 className="h-3 w-3" /> Published
+                                  </>
+                                ) : (
+                                  <>
+                                    <PauseCircle className="h-3 w-3" /> Draft
+                                  </>
+                                )}
+                              </button>
+                            </td>
+                            <td className="px-5 py-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <a
+                                  href={pdf.file_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="rounded-lg p-2 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                                  title="Open / Preview PDF"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingPdf(pdf);
+                                    setPdfModalOpen(true);
+                                  }}
+                                  className="rounded-lg p-2 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                                  title="Edit PDF details"
+                                >
+                                  <Edit3 className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePdf(pdf.id)}
+                                  className="rounded-lg p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer"
+                                  title="Delete PDF permanently"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      {adminPdfs.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-slate-500 text-sm">
+                            No PDF resources added yet. Click &quot;Upload New PDF&quot; to add course notes and worksheets.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* VIDEO MANAGEMENT */}
+          {normalizedSection === 'videos' && (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-slate-400">
+                  Manage class demo videos, recorded lectures, and hero teaser media. Configure video placement across the public homepage and student LMS.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingVideo({
+                      title: '',
+                      description: '',
+                      category: 'Demo',
+                      video_url: '',
+                      thumbnail_url: '',
+                      placement: 'homepage_featured',
+                      duration: '5:00',
+                      display_order: adminVideos.length + 1,
+                      is_published: 1,
+                    });
+                    setVideoModalOpen(true);
+                  }}
+                  className={btnPrimary}
+                >
+                  <Plus className="h-4 w-4" /> Add New Video
+                </button>
+              </div>
+
+              {/* Video Search */}
+              <div className="flex flex-wrap gap-3">
+                <div className="relative flex-1 min-w-[240px]">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <input
+                    value={videoSearch}
+                    onChange={(e) => setVideoSearch(e.target.value)}
+                    placeholder="Search videos by title or placement..."
+                    className={`${inputCls} pl-10`}
+                  />
+                </div>
+              </div>
+
+              {/* Video Table */}
+              <div className={`${cardCls} overflow-hidden`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="border-b border-slate-800 bg-slate-900/40 text-slate-400 uppercase tracking-wider font-semibold">
+                      <tr>
+                        <th className="px-5 py-3.5">Video Title & Media</th>
+                        <th className="px-5 py-3.5">Placement</th>
+                        <th className="px-5 py-3.5">Category</th>
+                        <th className="px-5 py-3.5">Status</th>
+                        <th className="px-5 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {adminVideos
+                        .filter((v) =>
+                          videoSearch
+                            ? v.title.toLowerCase().includes(videoSearch.toLowerCase()) ||
+                              v.placement.toLowerCase().includes(videoSearch.toLowerCase())
+                            : true
+                        )
+                        .map((vid) => (
+                          <tr key={vid.id} className="hover:bg-slate-800/30 transition-colors">
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+                                  <Video className="h-5 w-5 text-blue-400" />
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className="font-bold text-white text-sm truncate">{vid.title}</h4>
+                                  <p className="text-slate-400 text-xs line-clamp-1 mt-0.5">{vid.description || 'No description'}</p>
+                                  <span className="text-[11px] text-slate-500 font-mono">{vid.duration || '5:00'}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className="rounded-lg bg-blue-500/15 text-blue-300 border border-blue-500/30 px-2.5 py-1 font-semibold text-[11px]">
+                                {vid.placement === 'homepage_featured'
+                                  ? 'Homepage Featured Demo'
+                                  : vid.placement === 'homepage_section'
+                                  ? 'Homepage Section'
+                                  : 'Course / LMS'}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-slate-300">
+                              {vid.category || 'General'}
+                            </td>
+                            <td className="px-5 py-4">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleVideoPublish(vid)}
+                                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold cursor-pointer transition-all ${
+                                  vid.is_published
+                                    ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
+                                    : 'bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25'
+                                }`}
+                              >
+                                {vid.is_published ? (
+                                  <>
+                                    <CheckCircle2 className="h-3 w-3" /> Published
+                                  </>
+                                ) : (
+                                  <>
+                                    <PauseCircle className="h-3 w-3" /> Draft
+                                  </>
+                                )}
+                              </button>
+                            </td>
+                            <td className="px-5 py-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <a
+                                  href={vid.video_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="rounded-lg p-2 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                                  title="Watch Video"
+                                >
+                                  <PlayCircle className="h-4 w-4" />
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingVideo(vid);
+                                    setVideoModalOpen(true);
+                                  }}
+                                  className="rounded-lg p-2 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                                  title="Edit Video"
+                                >
+                                  <Edit3 className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteVideo(vid.id)}
+                                  className="rounded-lg p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer"
+                                  title="Delete Video permanently"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      {adminVideos.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-slate-500 text-sm">
+                            No videos configured yet. Click &quot;Add New Video&quot; to set featured demo and course lecture videos.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -1898,6 +2392,44 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                         />
                       </div>
                     </div>
+                    <div className="sm:col-span-2 pt-4 border-t border-slate-800">
+                      <h4 className="font-bold text-white text-sm mb-1">Official Social Media Profiles</h4>
+                      <p className="text-xs text-slate-400 mb-3">These links are bound to the header, footer, and contact page icons.</p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-400 mb-1">Instagram (Official)</label>
+                          <input
+                            value={cms.socials?.instagram_official || 'https://www.instagram.com/olearningplatform33?avpt=MWJid3M2bXM1azgxeQ=='}
+                            onChange={(e) => setCms({ ...cms, socials: { ...cms.socials, instagram_official: e.target.value } })}
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-400 mb-1">Instagram (Community)</label>
+                          <input
+                            value={cms.socials?.instagram_community || 'https://www.instagram.com/olearningplatform?fqnt=MWgxc2g4YnZueWs4Ng=='}
+                            onChange={(e) => setCms({ ...cms, socials: { ...cms.socials, instagram_community: e.target.value } })}
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-400 mb-1">Facebook Page</label>
+                          <input
+                            value={cms.socials?.facebook || 'https://www.facebook.com/share/1A4BFwTDa4/'}
+                            onChange={(e) => setCms({ ...cms, socials: { ...cms.socials, facebook: e.target.value } })}
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-400 mb-1">YouTube Channel</label>
+                          <input
+                            value={cms.socials?.youtube || 'https://youtube.com/@olearningplatform?si=YbsPm35pmp8z_UiP'}
+                            onChange={(e) => setCms({ ...cms, socials: { ...cms.socials, youtube: e.target.value } })}
+                            className={inputCls}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <div className="flex justify-end">
                     <button type="submit" className={btnPrimary}>
@@ -2461,6 +2993,317 @@ export function AdminPortal({ section }: { section: AdminSection }) {
               <button type="submit" className={btnPrimary}>
                 Create Request
               </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* PDF RESOURCE MODAL */}
+      {pdfModalOpen && editingPdf && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-xs">
+          <form
+            onSubmit={handleSavePdf}
+            className="w-full max-w-lg rounded-2xl border border-slate-800 bg-[#0F172A] p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-display text-lg font-bold text-white flex items-center gap-2">
+                <FileText className="h-5 w-5 text-red-400" />
+                {editingPdf.id ? 'Edit PDF Resource' : 'Upload & Publish PDF'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setPdfModalOpen(false);
+                  setEditingPdf(null);
+                }}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">Document Title *</label>
+              <input
+                required
+                value={editingPdf.title || ''}
+                onChange={(e) => setEditingPdf({ ...editingPdf, title: e.target.value })}
+                placeholder="e.g. Future Forms - Will and Going To Worksheet"
+                className={inputCls}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Category</label>
+                <select
+                  value={editingPdf.category || 'Worksheet'}
+                  onChange={(e) => setEditingPdf({ ...editingPdf, category: e.target.value })}
+                  className={inputCls}
+                >
+                  <option value="Worksheet">Practice Worksheet</option>
+                  <option value="Grammar">Grammar Notes</option>
+                  <option value="Vocabulary">Vocabulary Sheet</option>
+                  <option value="Syllabus">Course Syllabus</option>
+                  <option value="Mock Test">Mock Test Paper</option>
+                  <option value="General">General Resource</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">File Size</label>
+                <input
+                  value={editingPdf.file_size || ''}
+                  onChange={(e) => setEditingPdf({ ...editingPdf, file_size: e.target.value })}
+                  placeholder="e.g. 118 KB"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">Description / Instructions</label>
+              <textarea
+                rows={2}
+                value={editingPdf.description || ''}
+                onChange={(e) => setEditingPdf({ ...editingPdf, description: e.target.value })}
+                placeholder="Brief summary of what this PDF covers and student guidance"
+                className={inputCls}
+              />
+            </div>
+
+            {/* PDF File / S3 Upload */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 space-y-3">
+              <label className="block text-xs font-semibold text-slate-300">
+                PDF File (Upload to AWS S3 Cloud or Provide Link) *
+              </label>
+              
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer inline-flex items-center gap-2 rounded-xl border border-dashed border-slate-700 bg-slate-800/80 px-4 py-2.5 text-xs font-bold text-slate-200 hover:border-[#FF7A00] hover:text-white transition-colors">
+                  <UploadCloud className="h-4 w-4 text-[#FF7A00]" />
+                  <span>Choose PDF File</span>
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const sizeStr = file.size > 1024 * 1024 
+                          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
+                          : `${Math.round(file.size / 1024)} KB`;
+                        try {
+                          const uploadedUrl = await uploadFileToS3(file);
+                          setEditingPdf((prev) => prev ? {
+                            ...prev,
+                            file_url: uploadedUrl,
+                            file_size: sizeStr,
+                            title: prev.title || file.name.replace(/\.[^/.]+$/, ''),
+                          } : null);
+                          notify('PDF uploaded successfully to AWS S3!');
+                        } catch {
+                          alert('Upload failed. Please check network or paste direct URL.');
+                        }
+                      }
+                    }}
+                  />
+                </label>
+                {isUploadingAsset && (
+                  <span className="text-xs text-amber-400 font-semibold animate-pulse">
+                    Uploading to S3...
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-500 mb-1">Direct PDF URL / S3 Link</label>
+                <input
+                  required
+                  value={editingPdf.file_url || ''}
+                  onChange={(e) => setEditingPdf({ ...editingPdf, file_url: e.target.value })}
+                  placeholder="https://...s3.amazonaws.com/... or /pdfs/file.pdf"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(editingPdf.is_published)}
+                  onChange={(e) => setEditingPdf({ ...editingPdf, is_published: e.target.checked ? 1 : 0 })}
+                  className="accent-[#FF7A00] h-4 w-4 rounded"
+                />
+                Publish immediately to website
+              </label>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPdfModalOpen(false);
+                    setEditingPdf(null);
+                  }}
+                  className={btnGhost}
+                >
+                  Cancel
+                </button>
+                <button type="submit" disabled={isUploadingAsset} className={btnPrimary}>
+                  <Save className="h-4 w-4" /> Save PDF
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* VIDEO ASSET MODAL */}
+      {videoModalOpen && editingVideo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-xs">
+          <form
+            onSubmit={handleSaveVideo}
+            className="w-full max-w-lg rounded-2xl border border-slate-800 bg-[#0F172A] p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-display text-lg font-bold text-white flex items-center gap-2">
+                <Video className="h-5 w-5 text-blue-400" />
+                {editingVideo.id ? 'Edit Video Asset' : 'Add New Video'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setVideoModalOpen(false);
+                  setEditingVideo(null);
+                }}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">Video Title *</label>
+              <input
+                required
+                value={editingVideo.title || ''}
+                onChange={(e) => setEditingVideo({ ...editingVideo, title: e.target.value })}
+                placeholder="e.g. Free Interactive English Demo & Live Speaking Class"
+                className={inputCls}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Placement *</label>
+                <select
+                  value={editingVideo.placement || 'homepage_featured'}
+                  onChange={(e) => setEditingVideo({ ...editingVideo, placement: e.target.value })}
+                  className={inputCls}
+                >
+                  <option value="homepage_featured">Homepage Featured Demo</option>
+                  <option value="homepage_section">Homepage Section Video</option>
+                  <option value="dedicated_section">Course Library / LMS</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Duration</label>
+                <input
+                  value={editingVideo.duration || ''}
+                  onChange={(e) => setEditingVideo({ ...editingVideo, duration: e.target.value })}
+                  placeholder="e.g. 1:24 or 15:00"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">Description</label>
+              <textarea
+                rows={2}
+                value={editingVideo.description || ''}
+                onChange={(e) => setEditingVideo({ ...editingVideo, description: e.target.value })}
+                placeholder="What learners will experience in this video"
+                className={inputCls}
+              />
+            </div>
+
+            {/* Video File / URL Input */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 space-y-3">
+              <label className="block text-xs font-semibold text-slate-300">
+                Video Source / URL *
+              </label>
+
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer inline-flex items-center gap-2 rounded-xl border border-dashed border-slate-700 bg-slate-800/80 px-4 py-2.5 text-xs font-bold text-slate-200 hover:border-blue-400 hover:text-white transition-colors">
+                  <UploadCloud className="h-4 w-4 text-blue-400" />
+                  <span>Choose Video File</span>
+                  <input
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        try {
+                          const uploadedUrl = await uploadFileToS3(file);
+                          setEditingVideo((prev) => prev ? {
+                            ...prev,
+                            video_url: uploadedUrl,
+                            title: prev.title || file.name.replace(/\.[^/.]+$/, ''),
+                          } : null);
+                          notify('Video uploaded successfully!');
+                        } catch {
+                          alert('Upload failed. Please provide direct URL or local video path.');
+                        }
+                      }
+                    }}
+                  />
+                </label>
+                {isUploadingAsset && (
+                  <span className="text-xs text-blue-400 font-semibold animate-pulse">
+                    Uploading video...
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-500 mb-1">Direct Video URL or Path</label>
+                <input
+                  required
+                  value={editingVideo.video_url || ''}
+                  onChange={(e) => setEditingVideo({ ...editingVideo, video_url: e.target.value })}
+                  placeholder="/videos/platform-intro.mp4 or S3 URL"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(editingVideo.is_published)}
+                  onChange={(e) => setEditingVideo({ ...editingVideo, is_published: e.target.checked ? 1 : 0 })}
+                  className="accent-[#FF7A00] h-4 w-4 rounded"
+                />
+                Publish immediately to website
+              </label>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVideoModalOpen(false);
+                    setEditingVideo(null);
+                  }}
+                  className={btnGhost}
+                >
+                  Cancel
+                </button>
+                <button type="submit" disabled={isUploadingAsset} className={btnPrimary}>
+                  <Save className="h-4 w-4" /> Save Video
+                </button>
+              </div>
             </div>
           </form>
         </div>

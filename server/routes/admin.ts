@@ -815,6 +815,162 @@ router.delete('/notes/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// PDF Management (Master Prompt Requirement)
+router.get('/pdfs', (_req, res) => {
+  const rows = db.prepare('SELECT * FROM pdfs ORDER BY display_order ASC, id DESC').all();
+  res.json(rows);
+});
+
+router.post('/pdfs', (req, res) => {
+  const {
+    title,
+    description = '',
+    category = 'Worksheets & Notes',
+    file_url,
+    thumbnail_url = '',
+    file_size_text = '118 KB',
+    display_order = 1,
+    is_published = 1,
+  } = req.body || {};
+
+  if (!title || !file_url) {
+    res.status(400).json({ error: 'Title and PDF file URL are required.' });
+    return;
+  }
+
+  const r = db
+    .prepare(`
+      INSERT INTO pdfs (title, description, category, file_url, thumbnail_url, file_size_text, display_order, is_published)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(
+      String(title).trim(),
+      String(description).trim(),
+      String(category).trim(),
+      String(file_url).trim(),
+      String(thumbnail_url).trim(),
+      String(file_size_text).trim(),
+      Number(display_order) || 1,
+      is_published ? 1 : 0
+    );
+
+  res.status(201).json(db.prepare('SELECT * FROM pdfs WHERE id = ?').get(Number(r.lastInsertRowid)));
+});
+
+router.put('/pdfs/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const { title, description, category, file_url, thumbnail_url, file_size_text, display_order, is_published } = req.body || {};
+  db.prepare(`
+    UPDATE pdfs
+    SET title = COALESCE(?, title),
+        description = COALESCE(?, description),
+        category = COALESCE(?, category),
+        file_url = COALESCE(?, file_url),
+        thumbnail_url = COALESCE(?, thumbnail_url),
+        file_size_text = COALESCE(?, file_size_text),
+        display_order = COALESCE(?, display_order),
+        is_published = COALESCE(?, is_published),
+        updated_at = datetime('now')
+    WHERE id = ?
+  `).run(
+    title !== undefined ? String(title).trim() : null,
+    description !== undefined ? String(description).trim() : null,
+    category !== undefined ? String(category).trim() : null,
+    file_url !== undefined ? String(file_url).trim() : null,
+    thumbnail_url !== undefined ? String(thumbnail_url).trim() : null,
+    file_size_text !== undefined ? String(file_size_text).trim() : null,
+    display_order !== undefined ? Number(display_order) : null,
+    is_published !== undefined ? (is_published ? 1 : 0) : null,
+    id
+  );
+  res.json(db.prepare('SELECT * FROM pdfs WHERE id = ?').get(id));
+});
+
+router.delete('/pdfs/:id', (req, res) => {
+  db.prepare('DELETE FROM pdfs WHERE id = ?').run(Number(req.params.id));
+  res.json({ ok: true });
+});
+
+// Video Management (Master Prompt Requirement)
+router.get('/videos', (_req, res) => {
+  const rows = db.prepare('SELECT * FROM videos ORDER BY display_order ASC, id DESC').all();
+  res.json(rows);
+});
+
+router.post('/videos', (req, res) => {
+  const {
+    title,
+    description = '',
+    video_url,
+    thumbnail_url = '',
+    category = 'Featured Overview',
+    placement = 'homepage_featured',
+    duration_text = '02:15',
+    display_order = 1,
+    is_published = 1,
+  } = req.body || {};
+
+  if (!title || !video_url) {
+    res.status(400).json({ error: 'Title and Video URL are required.' });
+    return;
+  }
+
+  const r = db
+    .prepare(`
+      INSERT INTO videos (title, description, video_url, thumbnail_url, category, placement, duration_text, display_order, is_published)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(
+      String(title).trim(),
+      String(description).trim(),
+      String(video_url).trim(),
+      String(thumbnail_url).trim(),
+      String(category).trim(),
+      String(placement).trim(),
+      String(duration_text).trim(),
+      Number(display_order) || 1,
+      is_published ? 1 : 0
+    );
+
+  res.status(201).json(db.prepare('SELECT * FROM videos WHERE id = ?').get(Number(r.lastInsertRowid)));
+});
+
+router.put('/videos/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const { title, description, video_url, thumbnail_url, category, placement, duration_text, display_order, is_published } = req.body || {};
+  db.prepare(`
+    UPDATE videos
+    SET title = COALESCE(?, title),
+        description = COALESCE(?, description),
+        video_url = COALESCE(?, video_url),
+        thumbnail_url = COALESCE(?, thumbnail_url),
+        category = COALESCE(?, category),
+        placement = COALESCE(?, placement),
+        duration_text = COALESCE(?, duration_text),
+        display_order = COALESCE(?, display_order),
+        is_published = COALESCE(?, is_published),
+        updated_at = datetime('now')
+    WHERE id = ?
+  `).run(
+    title !== undefined ? String(title).trim() : null,
+    description !== undefined ? String(description).trim() : null,
+    video_url !== undefined ? String(video_url).trim() : null,
+    thumbnail_url !== undefined ? String(thumbnail_url).trim() : null,
+    category !== undefined ? String(category).trim() : null,
+    placement !== undefined ? String(placement).trim() : null,
+    duration_text !== undefined ? String(duration_text).trim() : null,
+    display_order !== undefined ? Number(display_order) : null,
+    is_published !== undefined ? (is_published ? 1 : 0) : null,
+    id
+  );
+  res.json(db.prepare('SELECT * FROM videos WHERE id = ?').get(id));
+});
+
+router.delete('/videos/:id', (req, res) => {
+  db.prepare('DELETE FROM videos WHERE id = ?').run(Number(req.params.id));
+  res.json({ ok: true });
+});
+
 // 6. Batches Management
 router.get('/batches', (_req, res) => {
   res.json(

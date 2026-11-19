@@ -235,6 +235,20 @@ router.get('/tests', (_req, res) => {
   res.json(rows);
 });
 
+router.get('/pdfs', (_req, res) => {
+  const rows = db
+    .prepare('SELECT * FROM pdfs WHERE is_published = 1 ORDER BY display_order ASC, id DESC')
+    .all();
+  res.json(rows);
+});
+
+router.get('/videos', (_req, res) => {
+  const rows = db
+    .prepare('SELECT * FROM videos WHERE is_published = 1 ORDER BY display_order ASC, id DESC')
+    .all();
+  res.json(rows);
+});
+
 router.get('/materials/:courseId/:materialNum', (req, res) => {
   const course = db
     .prepare('SELECT title, short_description FROM courses WHERE id = ?')
