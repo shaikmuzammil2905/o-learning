@@ -6,6 +6,7 @@ import {
   Award,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   ClipboardCheck,
   Copy,
   CreditCard,
@@ -122,6 +123,14 @@ interface AdminDashboardData {
   coursePerformance: Array<{ id: number; title: string; enrollments: number; revenue: number; is_published: number }>;
   recentPayments: Array<Record<string, unknown>>;
   revenueByMethod: Array<{ method: string; total: number; txns: number }>;
+  monthlyRevenue?: Array<{
+    key: string;
+    month: string;
+    year: number;
+    label: string;
+    total: number;
+    count: number;
+  }>;
 }
 
 const cardCls = 'rounded-2xl border border-slate-800/90 bg-[#0F172A] shadow-xl shadow-slate-950/40';
@@ -269,6 +278,8 @@ export function AdminPortal({ section }: { section: AdminSection }) {
   const [autoPollPayments, setAutoPollPayments] = useState(false);
 
   const [referralSearch, setReferralSearch] = useState('');
+  const [selectedRevenueMonthIndex, setSelectedRevenueMonthIndex] = useState<number | null>(null);
+  const [revenueScaleMode, setRevenueScaleMode] = useState<'target' | 'auto'>('target');
   const [redemptionFilter, setRedemptionFilter] = useState('all');
   const [redemptionModalOpen, setRedemptionModalOpen] = useState(false);
   const [redemptionForm, setRedemptionForm] = useState({
@@ -378,13 +389,34 @@ export function AdminPortal({ section }: { section: AdminSection }) {
       loadData(true);
     });
     const t = setInterval(() => {
+      // Pause silent background polling if user is actively in any modal
+      if (
+        courseModalOpen ||
+        quizModalOpen ||
+        catModalOpen ||
+        pdfModalOpen ||
+        videoModalOpen ||
+        editingUser ||
+        redemptionModalOpen
+      ) {
+        return;
+      }
       loadData(true);
     }, 5000);
     return () => {
       unsub();
       clearInterval(t);
     };
-  }, [loadData]);
+  }, [
+    loadData,
+    courseModalOpen,
+    quizModalOpen,
+    catModalOpen,
+    pdfModalOpen,
+    videoModalOpen,
+    editingUser,
+    redemptionModalOpen,
+  ]);
 
   // Filtered Courses + Pagination
   const filteredCourses = useMemo(() => {
@@ -942,6 +974,264 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                     <p className={`mt-1 font-display text-xl font-extrabold ${stat.color}`}>{stat.value}</p>
                   </div>
                 ))}
+              </div>
+
+              {/* Monthly Revenue Overview Card (Matching reference image copy 31.png) */}
+              <div className={`${cardCls} p-5 sm:p-6 relative overflow-hidden`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-2.5 w-2.5 rounded-full bg-blue-500 animate-pulse" />
+                      <h2 className="font-display text-base sm:text-lg font-bold text-white tracking-tight">
+                        Revenue Overview
+                      </h2>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Monthly platform revenue collections & transaction breakdown
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="inline-flex rounded-xl bg-slate-900/90 p-1 border border-slate-800 text-xs font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => setRevenueScaleMode('target')}
+                        className={`rounded-lg px-2.5 py-1 transition cursor-pointer ${
+                          revenueScaleMode === 'target'
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        2.5L Scale
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRevenueScaleMode('auto')}
+                        className={`rounded-lg px-2.5 py-1 transition cursor-pointer ${
+                          revenueScaleMode === 'auto'
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Auto Scale
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => navigate('/admin/payments')}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/80 px-3.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition cursor-pointer shadow-sm"
+                    >
+                      View Report
+                      <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Chart Graphic Area */}
+                {(() => {
+                  const monthly =
+                    dashboard.monthlyRevenue && dashboard.monthlyRevenue.length > 0
+                      ? dashboard.monthlyRevenue
+                      : [
+                          { key: '2026-06', month: 'Jun', year: 2026, label: "Jun '26", total: 0, count: 0 },
+                          { key: '2026-07', month: 'Jul', year: 2026, label: "Jul '26", total: 0, count: 0 },
+                          { key: '2026-08', month: 'Aug', year: 2026, label: "Aug '26", total: 0, count: 0 },
+                          { key: '2026-09', month: 'Sep', year: 2026, label: "Sep '26", total: 0, count: 0 },
+                          { key: '2026-10', month: 'Oct', year: 2026, label: "Oct '26", total: 0, count: 0 },
+                          {
+                            key: '2026-11',
+                            month: 'Nov',
+                            year: 2026,
+                            label: "Nov '26",
+                            total: Number(dashboard.metrics.totalRevenue || 0),
+                            count: Number(dashboard.metrics.successfulPaymentsCount || 0),
+                          },
+                        ];
+
+                  const maxVal = Math.max(...monthly.map((m) => m.total), 0);
+                  let scaleMax = 250000; // Reference screenshot: 2.5L
+                  if (revenueScaleMode === 'auto') {
+                    if (maxVal > 250000) scaleMax = Math.ceil(maxVal / 50000) * 50000;
+                    else if (maxVal > 50000) scaleMax = 250000;
+                    else if (maxVal > 10000) scaleMax = 50000;
+                    else if (maxVal > 2000) scaleMax = 10000;
+                    else scaleMax = 5000;
+                  } else {
+                    if (maxVal > 250000) scaleMax = Math.ceil(maxVal / 50000) * 50000;
+                  }
+
+                  const ticks = [
+                    scaleMax,
+                    scaleMax * 0.8,
+                    scaleMax * 0.6,
+                    scaleMax * 0.4,
+                    scaleMax * 0.2,
+                    0,
+                  ];
+
+                  const activeIndex =
+                    selectedRevenueMonthIndex !== null
+                      ? selectedRevenueMonthIndex
+                      : monthly.findIndex((m) => m.total > 0) !== -1
+                        ? monthly.findIndex((m) => m.total > 0)
+                        : monthly.length - 1;
+
+                  const activeItem = monthly[activeIndex] || monthly[monthly.length - 1];
+
+                  const formatYTick = (val: number) => {
+                    if (val === 0) return '0';
+                    if (val >= 100000) {
+                      const l = val / 100000;
+                      return `${Number.isInteger(l) ? l : l.toFixed(1)}L`;
+                    }
+                    if (val >= 1000) {
+                      const k = val / 1000;
+                      return `${Number.isInteger(k) ? k : k.toFixed(1)}k`;
+                    }
+                    return String(val);
+                  };
+
+                  const formatAmountDisplay = (val: number) => {
+                    if (val >= 100000) {
+                      const l = val / 100000;
+                      return `₹${Number.isInteger(l) ? l : l.toFixed(1)}L`;
+                    }
+                    if (val >= 1000) {
+                      return `₹${(val / 1000).toFixed(1)}k (₹${val.toLocaleString('en-IN')})`;
+                    }
+                    return `₹${val.toLocaleString('en-IN')}`;
+                  };
+
+                  return (
+                    <div className="space-y-4">
+                      {/* Main Graphic Chart Container */}
+                      <div className="relative pt-7 pb-3 px-2 sm:px-5 rounded-xl bg-slate-900/40 border border-slate-800/80">
+                        {/* Y-axis Ticks & Horizontal Grid Lines */}
+                        <div className="flex h-56 sm:h-64">
+                          {/* Left Y-axis labels */}
+                          <div className="flex flex-col justify-between pr-3 sm:pr-4 text-right w-11 sm:w-14 shrink-0 select-none pb-7">
+                            {ticks.map((tick, idx) => (
+                              <span key={idx} className="text-[11px] font-medium text-slate-400 leading-none">
+                                {formatYTick(tick)}
+                              </span>
+                            ))}
+                          </div>
+
+                          {/* Chart Bars Grid */}
+                          <div className="relative flex-1 flex flex-col justify-between">
+                            {/* Background Horizontal Guide Lines */}
+                            <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-7">
+                              {ticks.map((_, idx) => (
+                                <div
+                                  key={idx}
+                                  className={`w-full border-b ${
+                                    idx === ticks.length - 1
+                                      ? 'border-slate-700'
+                                      : 'border-slate-800/60'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+
+                            {/* Bars Container */}
+                            <div className="relative z-10 h-full flex items-end justify-around pb-7">
+                              {monthly.map((m, idx) => {
+                                const pct =
+                                  scaleMax > 0 ? Math.min(100, Math.max(0, (m.total / scaleMax) * 100)) : 0;
+                                const isSelected = activeIndex === idx;
+
+                                return (
+                                  <div
+                                    key={m.key || idx}
+                                    className="relative flex flex-col items-center h-full justify-end group cursor-pointer w-12 sm:w-16"
+                                    onClick={() => setSelectedRevenueMonthIndex(idx)}
+                                    onMouseEnter={() => setSelectedRevenueMonthIndex(idx)}
+                                  >
+                                    {/* Floating Tooltip Card over active/hovered bar (Matching reference image) */}
+                                    {isSelected && (
+                                      <div className="absolute -top-16 z-30 flex flex-col items-center pointer-events-none transition-all duration-200">
+                                        <div className="rounded-xl border border-slate-700 bg-slate-900/95 px-3 py-1.5 shadow-2xl backdrop-blur-md text-center min-w-[105px]">
+                                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-300">
+                                            {m.label}
+                                          </p>
+                                          <p className="text-xs font-extrabold text-blue-400 mt-0.5 whitespace-nowrap">
+                                            Revenue : {formatAmountDisplay(m.total)}
+                                          </p>
+                                          {m.count > 0 && (
+                                            <p className="text-[9px] text-slate-400">
+                                              {m.count} {m.count === 1 ? 'transaction' : 'transactions'}
+                                            </p>
+                                          )}
+                                        </div>
+                                        {/* Arrow beak */}
+                                        <div className="h-2 w-2 rotate-45 border-r border-b border-slate-700 bg-slate-900 -mt-1" />
+                                      </div>
+                                    )}
+
+                                    {/* Vertical Bar */}
+                                    <div
+                                      className={`w-7 sm:w-11 rounded-t-lg transition-all duration-300 ${
+                                        isSelected
+                                          ? 'bg-gradient-to-t from-blue-700 to-blue-500 shadow-lg shadow-blue-500/30 ring-2 ring-blue-400/60'
+                                          : 'bg-gradient-to-t from-blue-700/85 to-blue-600/90 hover:from-blue-600 hover:to-blue-400'
+                                      }`}
+                                      style={{
+                                        height: m.total > 0 ? `${Math.max(8, pct)}%` : '4px',
+                                      }}
+                                    />
+
+                                    {/* Month Label below the axis */}
+                                    <span
+                                      className={`absolute -bottom-6 text-[10px] sm:text-xs font-semibold transition-colors ${
+                                        isSelected ? 'text-blue-400 font-bold' : 'text-slate-400'
+                                      }`}
+                                    >
+                                      {m.label}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Revenue Summary KPI Bar */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Selected Month</p>
+                          <p className="text-sm font-bold text-white mt-0.5">{activeItem.label}</p>
+                          <p className="text-xs font-extrabold text-blue-400">₹{activeItem.total.toLocaleString('en-IN')}</p>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">6-Mo Total Revenue</p>
+                          <p className="text-sm font-bold text-emerald-400 mt-0.5">
+                            ₹{monthly.reduce((sum, m) => sum + m.total, 0).toLocaleString('en-IN')}
+                          </p>
+                          <p className="text-[10px] text-slate-400">Verified platform payments</p>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Monthly Average</p>
+                          <p className="text-sm font-bold text-purple-400 mt-0.5">
+                            ₹{Math.round(monthly.reduce((sum, m) => sum + m.total, 0) / (monthly.length || 1)).toLocaleString('en-IN')}
+                          </p>
+                          <p className="text-[10px] text-slate-400">Per active month</p>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Payment Gateway</p>
+                          <p className="text-sm font-bold text-[#FF7A00] mt-0.5">Razorpay & UPI Live</p>
+                          <Link to="/admin/payments" className="text-[10px] text-blue-400 hover:underline">
+                            Manage all records →
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Quick Actions */}

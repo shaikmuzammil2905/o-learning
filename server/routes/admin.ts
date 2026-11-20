@@ -98,6 +98,49 @@ router.get('/dashboard', (_req, res) => {
     return found || { method, count: 0, txns: 0, total: 0 };
   });
 
+  // Monthly Revenue breakdown for the Revenue Overview chart (matching reference screenshot)
+  const monthlyRevenueRows = db
+    .prepare(`
+      SELECT strftime('%Y-%m', created_at) as month_key,
+             COUNT(*) as count,
+             COALESCE(SUM(final_amount), 0) as total
+      FROM payments
+      WHERE status = 'successful' AND created_at >= date('now', '-11 month', 'start of month')
+      GROUP BY month_key
+      ORDER BY month_key ASC
+    `)
+    .all() as Array<{ month_key: string; count: number; total: number }>;
+
+  const monthlyRevMap = new Map(monthlyRevenueRows.map((r) => [r.month_key, r]));
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthlyRevenue: Array<{
+    key: string;
+    month: string;
+    year: number;
+    label: string;
+    total: number;
+    count: number;
+  }> = [];
+
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const key = `${y}-${m}`;
+    const shortYear = String(y).slice(-2);
+    const label = `${monthNames[d.getMonth()]} '${shortYear}`;
+    const row = monthlyRevMap.get(key);
+    monthlyRevenue.push({
+      key,
+      month: monthNames[d.getMonth()],
+      year: y,
+      label,
+      total: row ? Number(row.total) : 0,
+      count: row ? Number(row.count) : 0,
+    });
+  }
+
   res.json({
     metrics: {
       totalCourses,
@@ -140,6 +183,7 @@ router.get('/dashboard', (_req, res) => {
     recentPayments,
     recentActivity,
     revenueByMethod,
+    monthlyRevenue,
   });
 });
 

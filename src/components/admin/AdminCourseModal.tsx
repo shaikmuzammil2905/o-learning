@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { BookOpen, IndianRupee, Image as ImageIcon, Layers, Plus, Save, Star, Trash2, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import { ImageUploader } from './ImageUploader';
@@ -96,60 +96,77 @@ export const AdminCourseModal: React.FC<{
     Record<number, { title: string; lesson_type: string; video_url: string; duration_minutes: number; is_preview: boolean }>
   >({});
 
+  const wasOpenRef = useRef(false);
+  const currentInitialIdRef = useRef<number | undefined | null>(undefined);
+
   useEffect(() => {
-    if (!open) return;
-    setTab('basic');
-    setError('');
-    if (initial?.id) {
-      setCourseId(initial.id);
-      setForm({
-        title: initial.title || '',
-        category_id: initial.category_id ? String(initial.category_id) : categories[0]?.id ? String(categories[0].id) : '',
-        short_description: initial.short_description || '',
-        description: initial.description || '',
-        level: initial.level || 'All Levels',
-        duration: initial.duration || '12 Weeks',
-        language: initial.language || 'English / Bilingual',
-        prerequisites: initial.prerequisites || '',
-        price: Number(initial.price ?? 1999),
-        discount_price: initial.discount_price !== null && initial.discount_price !== undefined ? initial.discount_price : '',
-        is_free: Boolean(initial.is_free),
-        is_published: initial.is_published !== 0,
-        featured: Boolean(initial.featured),
-        faculty_id: initial.faculty_id ? String(initial.faculty_id) : faculty[0]?.id ? String(faculty[0].id) : '',
-        thumbnail_url: initial.thumbnail_url || '/courses/spoken-english.png',
-        banner_image: initial.banner_image || '',
-        preview_image: initial.preview_image || '',
-        instructor_image: initial.instructor_image || '',
-        what_you_learn: Array.isArray(initial.what_you_learn) ? initial.what_you_learn.join('\n') : '',
-      });
-      loadCurriculum(initial.id);
-    } else {
-      setCourseId(null);
-      setModules([]);
-      setForm({
-        title: '',
-        category_id: categories[0]?.id ? String(categories[0].id) : '',
-        short_description: '',
-        description: '',
-        level: 'All Levels',
-        duration: '12 Weeks',
-        language: 'English / Bilingual',
-        prerequisites: 'No prerequisites required',
-        price: 1999,
-        discount_price: 999,
-        is_free: false,
-        is_published: true,
-        featured: false,
-        faculty_id: faculty[0]?.id ? String(faculty[0].id) : '',
-        thumbnail_url: '/courses/spoken-english.png',
-        banner_image: '',
-        preview_image: '',
-        instructor_image: '',
-        what_you_learn: 'Core foundations & structured modules\nPractice quizzes & certification\nLive mentor Q&A sessions',
-      });
+    if (!open) {
+      wasOpenRef.current = false;
+      currentInitialIdRef.current = undefined;
+      return;
     }
-  }, [open, initial, categories, faculty]);
+
+    const isNewlyOpened = !wasOpenRef.current;
+    const isDifferentCourse = currentInitialIdRef.current !== initial?.id;
+
+    // ONLY initialize/reset form when newly opened or when the target course changes.
+    // NEVER reset while the user is actively typing or switching tabs!
+    if (isNewlyOpened || isDifferentCourse) {
+      wasOpenRef.current = true;
+      currentInitialIdRef.current = initial?.id ?? null;
+      setTab('basic');
+      setError('');
+      if (initial?.id) {
+        setCourseId(initial.id);
+        setForm({
+          title: initial.title || '',
+          category_id: initial.category_id ? String(initial.category_id) : categories[0]?.id ? String(categories[0].id) : '',
+          short_description: initial.short_description || '',
+          description: initial.description || '',
+          level: initial.level || 'All Levels',
+          duration: initial.duration || '12 Weeks',
+          language: initial.language || 'English / Bilingual',
+          prerequisites: initial.prerequisites || '',
+          price: Number(initial.price ?? 1999),
+          discount_price: initial.discount_price !== null && initial.discount_price !== undefined ? initial.discount_price : '',
+          is_free: Boolean(initial.is_free),
+          is_published: initial.is_published !== 0,
+          featured: Boolean(initial.featured),
+          faculty_id: initial.faculty_id ? String(initial.faculty_id) : faculty[0]?.id ? String(faculty[0].id) : '',
+          thumbnail_url: initial.thumbnail_url || '/courses/spoken-english.png',
+          banner_image: initial.banner_image || '',
+          preview_image: initial.preview_image || '',
+          instructor_image: initial.instructor_image || '',
+          what_you_learn: Array.isArray(initial.what_you_learn) ? initial.what_you_learn.join('\n') : '',
+        });
+        loadCurriculum(initial.id);
+      } else {
+        setCourseId(null);
+        setModules([]);
+        setForm({
+          title: '',
+          category_id: categories[0]?.id ? String(categories[0].id) : '',
+          short_description: '',
+          description: '',
+          level: 'All Levels',
+          duration: '12 Weeks',
+          language: 'English / Bilingual',
+          prerequisites: 'No prerequisites required',
+          price: 1999,
+          discount_price: 999,
+          is_free: false,
+          is_published: true,
+          featured: false,
+          faculty_id: faculty[0]?.id ? String(faculty[0].id) : '',
+          thumbnail_url: '/courses/spoken-english.png',
+          banner_image: '',
+          preview_image: '',
+          instructor_image: '',
+          what_you_learn: 'Core foundations & structured modules\nPractice quizzes & certification\nLive mentor Q&A sessions',
+        });
+      }
+    }
+  }, [open, initial?.id]);
 
   const loadCurriculum = async (id: number) => {
     try {

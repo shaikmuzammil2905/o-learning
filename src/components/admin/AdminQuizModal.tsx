@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { HelpCircle, Plus, Save, Trash2, X } from 'lucide-react';
 import { api } from '../../lib/api';
 
@@ -68,45 +68,61 @@ export const AdminQuizModal: React.FC<{
     explanation: '',
   });
 
+  const wasOpenRef = useRef(false);
+  const currentInitialIdRef = useRef<number | undefined | null>(undefined);
+
   useEffect(() => {
-    if (!open) return;
-    setTab('details');
-    if (initial?.id) {
-      setQuizId(initial.id);
-      setForm({
-        title: initial.title || '',
-        course_id: initial.course_id ? String(initial.course_id) : '',
-        description: initial.description || '',
-        duration_minutes: Number(initial.duration_minutes || 20),
-        total_marks: Number(initial.total_marks || 20),
-        pass_marks: Number(initial.pass_marks || 8),
-        negative_marks: Number(initial.negative_marks || 0),
-        difficulty: initial.difficulty || 'Medium',
-        price: Number(initial.price || 0),
-        certificate_enabled: initial.certificate_enabled !== 0,
-        expiry_date: initial.expiry_date || '',
-        is_published: initial.is_published !== 0,
-      });
-      loadQuestions(initial.id);
-    } else {
-      setQuizId(null);
-      setQuestions([]);
-      setForm({
-        title: '',
-        course_id: courses[0]?.id ? String(courses[0].id) : '',
-        description: '',
-        duration_minutes: 20,
-        total_marks: 20,
-        pass_marks: 8,
-        negative_marks: 0,
-        difficulty: 'Medium',
-        price: 0,
-        certificate_enabled: true,
-        expiry_date: '',
-        is_published: true,
-      });
+    if (!open) {
+      wasOpenRef.current = false;
+      currentInitialIdRef.current = undefined;
+      return;
     }
-  }, [open, initial, courses]);
+
+    const isNewlyOpened = !wasOpenRef.current;
+    const isDifferentQuiz = currentInitialIdRef.current !== initial?.id;
+
+    // ONLY initialize form when newly opened or when target quiz id changes
+    if (isNewlyOpened || isDifferentQuiz) {
+      wasOpenRef.current = true;
+      currentInitialIdRef.current = initial?.id ?? null;
+      setTab('details');
+      if (initial?.id) {
+        setQuizId(initial.id);
+        setForm({
+          title: initial.title || '',
+          course_id: initial.course_id ? String(initial.course_id) : '',
+          description: initial.description || '',
+          duration_minutes: Number(initial.duration_minutes || 20),
+          total_marks: Number(initial.total_marks || 20),
+          pass_marks: Number(initial.pass_marks || 8),
+          negative_marks: Number(initial.negative_marks || 0),
+          difficulty: initial.difficulty || 'Medium',
+          price: Number(initial.price || 0),
+          certificate_enabled: initial.certificate_enabled !== 0,
+          expiry_date: initial.expiry_date || '',
+          is_published: initial.is_published !== 0,
+        });
+        loadQuestions(initial.id);
+      } else {
+        setQuizId(null);
+        setQuestions([]);
+        setForm({
+          title: '',
+          course_id: courses[0]?.id ? String(courses[0].id) : '',
+          description: '',
+          duration_minutes: 20,
+          total_marks: 20,
+          pass_marks: 8,
+          negative_marks: 0,
+          difficulty: 'Medium',
+          price: 0,
+          certificate_enabled: true,
+          expiry_date: '',
+          is_published: true,
+        });
+      }
+    }
+  }, [open, initial?.id]);
 
   const loadQuestions = async (id: number) => {
     try {
