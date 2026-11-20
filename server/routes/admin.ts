@@ -477,8 +477,8 @@ router.post('/categories', (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM categories WHERE id = ?').get(Number(r.lastInsertRowid)));
 });
 
-router.put('/categories/:id', (req, res) => {
-  const id = Number(req.params.id);
+const handleUpdateCategory = (req: any, res: any) => {
+  const id = Number(req.params.id || req.body.id);
   const b = req.body || {};
   db.prepare(`
     UPDATE categories
@@ -497,12 +497,17 @@ router.put('/categories/:id', (req, res) => {
     id
   );
   res.json(db.prepare('SELECT * FROM categories WHERE id = ?').get(id));
-});
+};
+router.put('/categories/:id', handleUpdateCategory);
+router.put('/categories', handleUpdateCategory);
 
-router.delete('/categories/:id', (req, res) => {
-  db.prepare('DELETE FROM categories WHERE id = ?').run(Number(req.params.id));
+const handleDeleteCategory = (req: any, res: any) => {
+  const id = Number(req.params.id || req.query.id || req.body.id);
+  db.prepare('DELETE FROM categories WHERE id = ?').run(id);
   res.json({ ok: true });
-});
+};
+router.delete('/categories/:id', handleDeleteCategory);
+router.delete('/categories', handleDeleteCategory);
 
 // 5. Courses, Modules & Lessons Management
 router.get('/courses', (_req, res) => {
@@ -602,8 +607,8 @@ router.post('/courses', (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM courses WHERE id = ?').get(cid));
 });
 
-router.put('/courses/:id', (req, res) => {
-  const id = Number(req.params.id);
+const handleUpdateCourse = (req: any, res: any) => {
+  const id = Number(req.params.id || req.body.id);
   const b = req.body || {};
   db.prepare(`
     UPDATE courses
@@ -656,7 +661,9 @@ router.put('/courses/:id', (req, res) => {
     id
   );
   res.json(db.prepare('SELECT * FROM courses WHERE id = ?').get(id));
-});
+};
+router.put('/courses/:id', handleUpdateCourse);
+router.put('/courses', handleUpdateCourse);
 
 router.post('/courses/:id/duplicate', (req, res) => {
   const srcId = Number(req.params.id);
@@ -716,10 +723,13 @@ router.post('/courses/:id/duplicate', (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM courses WHERE id = ?').get(newId));
 });
 
-router.delete('/courses/:id', (req, res) => {
-  db.prepare('DELETE FROM courses WHERE id = ?').run(Number(req.params.id));
+const handleDeleteCourse = (req: any, res: any) => {
+  const id = Number(req.params.id || req.query.id || req.body.id);
+  db.prepare('DELETE FROM courses WHERE id = ?').run(id);
   res.json({ ok: true });
-});
+};
+router.delete('/courses/:id', handleDeleteCourse);
+router.delete('/courses', handleDeleteCourse);
 
 router.get('/courses/:id/curriculum', (req, res) => {
   const cid = Number(req.params.id);
@@ -828,10 +838,10 @@ router.post('/pdfs', (req, res) => {
     category = 'Worksheets & Notes',
     file_url,
     thumbnail_url = '',
-    file_size_text = '118 KB',
     display_order = 1,
     is_published = 1,
   } = req.body || {};
+  const file_size_text = req.body?.file_size_text || req.body?.file_size || '118 KB';
 
   if (!title || !file_url) {
     res.status(400).json({ error: 'Title and PDF file URL are required.' });
@@ -857,9 +867,10 @@ router.post('/pdfs', (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM pdfs WHERE id = ?').get(Number(r.lastInsertRowid)));
 });
 
-router.put('/pdfs/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const { title, description, category, file_url, thumbnail_url, file_size_text, display_order, is_published } = req.body || {};
+const handleUpdatePdf = (req: any, res: any) => {
+  const id = Number(req.params.id || req.body.id);
+  const { title, description, category, file_url, thumbnail_url, display_order, is_published } = req.body || {};
+  const file_size_text = req.body?.file_size_text || req.body?.file_size;
   db.prepare(`
     UPDATE pdfs
     SET title = COALESCE(?, title),
@@ -884,12 +895,17 @@ router.put('/pdfs/:id', (req, res) => {
     id
   );
   res.json(db.prepare('SELECT * FROM pdfs WHERE id = ?').get(id));
-});
+};
+router.put('/pdfs/:id', handleUpdatePdf);
+router.put('/pdfs', handleUpdatePdf);
 
-router.delete('/pdfs/:id', (req, res) => {
-  db.prepare('DELETE FROM pdfs WHERE id = ?').run(Number(req.params.id));
+const handleDeletePdf = (req: any, res: any) => {
+  const id = Number(req.params.id || req.query.id || req.body.id);
+  db.prepare('DELETE FROM pdfs WHERE id = ?').run(id);
   res.json({ ok: true });
-});
+};
+router.delete('/pdfs/:id', handleDeletePdf);
+router.delete('/pdfs', handleDeletePdf);
 
 // Video Management (Master Prompt Requirement)
 router.get('/videos', (_req, res) => {
@@ -905,10 +921,10 @@ router.post('/videos', (req, res) => {
     thumbnail_url = '',
     category = 'Featured Overview',
     placement = 'homepage_featured',
-    duration_text = '02:15',
     display_order = 1,
     is_published = 1,
   } = req.body || {};
+  const duration_text = req.body?.duration_text || req.body?.duration || '02:15';
 
   if (!title || !video_url) {
     res.status(400).json({ error: 'Title and Video URL are required.' });
@@ -935,9 +951,10 @@ router.post('/videos', (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM videos WHERE id = ?').get(Number(r.lastInsertRowid)));
 });
 
-router.put('/videos/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const { title, description, video_url, thumbnail_url, category, placement, duration_text, display_order, is_published } = req.body || {};
+const handleUpdateVideo = (req: any, res: any) => {
+  const id = Number(req.params.id || req.body.id);
+  const { title, description, video_url, thumbnail_url, category, placement, display_order, is_published } = req.body || {};
+  const duration_text = req.body?.duration_text || req.body?.duration;
   db.prepare(`
     UPDATE videos
     SET title = COALESCE(?, title),
@@ -964,12 +981,17 @@ router.put('/videos/:id', (req, res) => {
     id
   );
   res.json(db.prepare('SELECT * FROM videos WHERE id = ?').get(id));
-});
+};
+router.put('/videos/:id', handleUpdateVideo);
+router.put('/videos', handleUpdateVideo);
 
-router.delete('/videos/:id', (req, res) => {
-  db.prepare('DELETE FROM videos WHERE id = ?').run(Number(req.params.id));
+const handleDeleteVideo = (req: any, res: any) => {
+  const id = Number(req.params.id || req.query.id || req.body.id);
+  db.prepare('DELETE FROM videos WHERE id = ?').run(id);
   res.json({ ok: true });
-});
+};
+router.delete('/videos/:id', handleDeleteVideo);
+router.delete('/videos', handleDeleteVideo);
 
 // 6. Batches Management
 router.get('/batches', (_req, res) => {

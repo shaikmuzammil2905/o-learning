@@ -42,7 +42,7 @@ import { AdminQuizModal, type QuizRow } from '../../components/admin/AdminQuizMo
 import { ImageUploader } from '../../components/admin/ImageUploader';
 import { api } from '../../lib/api';
 import { broadcastPlatformUpdate, subscribePlatformUpdates } from '../../lib/realtime';
-import { useSite } from '../../context/SiteContext';
+import { useSite, mergeOverrides } from '../../context/SiteContext';
 import type { PdfResource, VideoResource } from '../../types';
 
 export const ADMIN_LINKS: SidebarLink[] = [
@@ -314,9 +314,9 @@ export function AdminPortal({ section }: { section: AdminSection }) {
         api<Array<Record<string, unknown>>>('/api/admin/faculty').catch(() => []),
         api<Array<Record<string, unknown>>>('/api/admin/courses').catch(() => []),
       ]);
-      setCategories(cats);
+      setCategories(mergeOverrides(cats as any, 'olearn_custom_categories'));
       setFaculty(facs);
-      setCourses(cs);
+      setCourses(mergeOverrides(cs as any, 'olearn_custom_courses'));
 
       if (normalizedSection === 'overview') {
         const [d, enqs] = await Promise.all([
@@ -328,9 +328,11 @@ export function AdminPortal({ section }: { section: AdminSection }) {
       } else if (normalizedSection === 'quizzes') {
         setQuizzes(await api<QuizRow[]>('/api/admin/tests'));
       } else if (normalizedSection === 'pdfs') {
-        setAdminPdfs(await api<PdfResource[]>('/api/admin/pdfs').catch(() => []));
+        const serverPdfs = await api<PdfResource[]>('/api/admin/pdfs').catch(() => []);
+        setAdminPdfs(mergeOverrides(serverPdfs, 'olearn_custom_pdfs'));
       } else if (normalizedSection === 'videos') {
-        setAdminVideos(await api<VideoResource[]>('/api/admin/videos').catch(() => []));
+        const serverVideos = await api<VideoResource[]>('/api/admin/videos').catch(() => []);
+        setAdminVideos(mergeOverrides(serverVideos, 'olearn_custom_videos'));
       } else if (normalizedSection === 'users') {
         setUsersList(await api<Array<Record<string, unknown>>>('/api/admin/users'));
       } else if (normalizedSection === 'certificates') {
@@ -426,11 +428,28 @@ export function AdminPortal({ section }: { section: AdminSection }) {
   }, [usersList, userSearch, userRoleFilter]);
 
   const toggleCoursePublish = async (c: Record<string, unknown>) => {
-    await api(`/api/admin/courses/${c.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ is_published: Number(c.is_published) === 1 ? 0 : 1 }),
-    });
-    notify(Number(c.is_published) === 1 ? 'Course moved to Draft.' : 'Course published to catalog.');
+    const nextPublished = Number(c.is_published) === 1 ? 0 : 1;
+    try {
+      await api(`/api/admin/courses/${c.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ is_published: nextPublished }),
+      });
+    } catch {}
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('olearn_custom_courses') || '[]';
+        const list = JSON.parse(raw) as any[];
+        const idx = list.findIndex((item) => Number(item.id) === Number(c.id));
+        if (idx >= 0) {
+          list[idx].is_published = nextPublished;
+        } else {
+          list.push({ ...c, is_published: nextPublished });
+        }
+        localStorage.setItem('olearn_custom_courses', JSON.stringify(list));
+      } catch {}
+    }
+    setCourses((prev) => prev.map((item) => Number(item.id) === Number(c.id) ? { ...item, is_published: nextPublished } : item));
+    notify(nextPublished === 0 ? 'Course moved to Draft.' : 'Course published to catalog.');
     refreshPublicSite();
     broadcastPlatformUpdate('course');
     loadData(true);
@@ -445,7 +464,20 @@ export function AdminPortal({ section }: { section: AdminSection }) {
 
   const deleteCourse = async (id: unknown) => {
     if (!window.confirm('Delete this course permanently?')) return;
-    await api(`/api/admin/courses/${id}`, { method: 'DELETE' });
+    try {
+      await api(`/api/admin/courses/${id}`, { method: 'DELETE' });
+    } catch {}
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('olearn_custom_courses') || '[]';
+        const list = (JSON.parse(raw) as any[]).filter((c) => Number(c.id) !== Number(id));
+        localStorage.setItem('olearn_custom_courses', JSON.stringify(list));
+        const delRaw = localStorage.getItem('olearn_custom_courses_deleted') || '[]';
+        const delList = Array.from(new Set([...JSON.parse(delRaw), Number(id)]));
+        localStorage.setItem('olearn_custom_courses_deleted', JSON.stringify(delList));
+      } catch {}
+    }
+    setCourses((prev) => prev.filter((c) => Number(c.id) !== Number(id)));
     notify('Course deleted.');
     refreshPublicSite();
     broadcastPlatformUpdate('course');
@@ -463,13 +495,30 @@ export function AdminPortal({ section }: { section: AdminSection }) {
       icon_name: catForm.icon_name,
       is_active: catForm.is_active ? 1 : 0,
     };
-    if (catForm.id) {
-      await api(`/api/admin/categories/${catForm.id}`, { method: 'PUT', body: JSON.stringify(payload) });
-      notify('Category updated.');
-    } else {
-      await api('/api/admin/categories', { method: 'POST', body: JSON.stringify(payload) });
-      notify('Category created.');
+    let savedId = catForm.id;
+    try {
+      if (catForm.id) {
+        await api(`/api/admin/categories/${catForm.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+        notify('Category updated.');
+      } else {
+        const created = await api<{ id: number }>('/api/admin/categories', { method: 'POST', body: JSON.stringify(payload) });
+        if (created?.id) savedId = created.id;
+        notify('Category created.');
+      }
+    } catch {}
+    const itemToStore = { id: savedId || Date.now(), ...payload };
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('olearn_custom_categories') || '[]';
+        const list = (JSON.parse(raw) as any[]).filter((c) => Number(c.id) !== Number(itemToStore.id));
+        list.push(itemToStore);
+        localStorage.setItem('olearn_custom_categories', JSON.stringify(list));
+      } catch {}
     }
+    setCategories((prev) => {
+      const filtered = prev.filter((c) => Number(c.id) !== Number(itemToStore.id));
+      return [...filtered, itemToStore];
+    });
     setCatModalOpen(false);
     refreshPublicSite();
     broadcastPlatformUpdate('category');
@@ -530,30 +579,67 @@ export function AdminPortal({ section }: { section: AdminSection }) {
       alert('Please enter a title and provide/upload a valid PDF file.');
       return;
     }
+    const fileSizeVal = editingPdf.file_size_text || (editingPdf as any).file_size || '120 KB';
     const payload = {
       title: editingPdf.title,
       description: editingPdf.description || '',
       category: editingPdf.category || 'General',
       file_url: editingPdf.file_url,
       thumbnail_url: editingPdf.thumbnail_url || '',
-      file_size: editingPdf.file_size || '120 KB',
+      file_size_text: fileSizeVal,
+      file_size: fileSizeVal,
       display_order: Number(editingPdf.display_order) || 0,
       is_published: editingPdf.is_published ? 1 : 0,
-      course_id: editingPdf.course_id || null,
+      course_id: (editingPdf as any).course_id || null,
     };
-    if (editingPdf.id) {
-      await api('/api/admin/pdfs', {
-        method: 'PUT',
-        body: JSON.stringify({ id: editingPdf.id, ...payload }),
-      });
-      notify('PDF resource updated.');
-    } else {
-      await api('/api/admin/pdfs', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      notify('New PDF resource added and published.');
+    let savedId = editingPdf.id;
+    try {
+      if (editingPdf.id) {
+        await api(`/api/admin/pdfs/${editingPdf.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+        notify('PDF resource updated.');
+      } else {
+        const res = await api<PdfResource>('/api/admin/pdfs', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        if (res?.id) savedId = res.id;
+        notify('New PDF resource added and published.');
+      }
+    } catch (err) {
+      console.error(err);
     }
+
+    const itemToStore: PdfResource = {
+      id: savedId || Date.now(),
+      title: payload.title,
+      description: payload.description,
+      category: payload.category,
+      file_url: payload.file_url,
+      thumbnail_url: payload.thumbnail_url,
+      file_size_text: fileSizeVal,
+      display_order: payload.display_order,
+      is_published: payload.is_published,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('olearn_custom_pdfs') || '[]';
+        const list = (JSON.parse(raw) as any[]).filter((p) => Number(p.id) !== Number(itemToStore.id));
+        list.unshift(itemToStore);
+        localStorage.setItem('olearn_custom_pdfs', JSON.stringify(list));
+      } catch {}
+    }
+
+    setAdminPdfs((prev) => {
+      const filtered = prev.filter((p) => Number(p.id) !== Number(itemToStore.id));
+      return [itemToStore, ...filtered];
+    });
+
     setPdfModalOpen(false);
     setEditingPdf(null);
     refreshPublicSite();
@@ -563,7 +649,20 @@ export function AdminPortal({ section }: { section: AdminSection }) {
 
   const handleDeletePdf = async (id: number) => {
     if (!window.confirm('Delete this PDF resource permanently?')) return;
-    await api(`/api/admin/pdfs?id=${id}`, { method: 'DELETE' });
+    try {
+      await api(`/api/admin/pdfs/${id}`, { method: 'DELETE' });
+    } catch {}
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('olearn_custom_pdfs') || '[]';
+        const list = (JSON.parse(raw) as any[]).filter((p) => Number(p.id) !== Number(id));
+        localStorage.setItem('olearn_custom_pdfs', JSON.stringify(list));
+        const delRaw = localStorage.getItem('olearn_custom_pdfs_deleted') || '[]';
+        const delList = Array.from(new Set([...JSON.parse(delRaw), Number(id)]));
+        localStorage.setItem('olearn_custom_pdfs_deleted', JSON.stringify(delList));
+      } catch {}
+    }
+    setAdminPdfs((prev) => prev.filter((p) => Number(p.id) !== Number(id)));
     notify('PDF resource deleted.');
     refreshPublicSite();
     broadcastPlatformUpdate('cms');
@@ -571,11 +670,24 @@ export function AdminPortal({ section }: { section: AdminSection }) {
   };
 
   const handleTogglePdfPublish = async (pdf: PdfResource) => {
-    await api('/api/admin/pdfs', {
-      method: 'PUT',
-      body: JSON.stringify({ id: pdf.id, is_published: pdf.is_published ? 0 : 1 }),
-    });
-    notify(pdf.is_published ? 'PDF unpublished from student site.' : 'PDF published to live site.');
+    const nextPublished = pdf.is_published ? 0 : 1;
+    try {
+      await api(`/api/admin/pdfs/${pdf.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ is_published: nextPublished }),
+      });
+    } catch {}
+    const updated = { ...pdf, is_published: nextPublished };
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('olearn_custom_pdfs') || '[]';
+        const list = (JSON.parse(raw) as any[]).map((p) => Number(p.id) === Number(pdf.id) ? updated : p);
+        if (!list.some((p) => Number(p.id) === Number(pdf.id))) list.push(updated);
+        localStorage.setItem('olearn_custom_pdfs', JSON.stringify(list));
+      } catch {}
+    }
+    setAdminPdfs((prev) => prev.map((p) => Number(p.id) === Number(pdf.id) ? updated : p));
+    notify(nextPublished ? 'PDF published to live site.' : 'PDF moved to Draft.');
     refreshPublicSite();
     broadcastPlatformUpdate('cms');
     loadData(true);
@@ -587,6 +699,7 @@ export function AdminPortal({ section }: { section: AdminSection }) {
       alert('Please enter a video title and provide/upload a video URL.');
       return;
     }
+    const durationVal = editingVideo.duration_text || (editingVideo as any).duration || '02:15';
     const payload = {
       title: editingVideo.title,
       description: editingVideo.description || '',
@@ -594,24 +707,61 @@ export function AdminPortal({ section }: { section: AdminSection }) {
       video_url: editingVideo.video_url,
       thumbnail_url: editingVideo.thumbnail_url || '',
       placement: editingVideo.placement || 'homepage_featured',
-      duration: editingVideo.duration || '5:00',
+      duration_text: durationVal,
+      duration: durationVal,
       display_order: Number(editingVideo.display_order) || 0,
       is_published: editingVideo.is_published ? 1 : 0,
-      course_id: editingVideo.course_id || null,
+      course_id: (editingVideo as any).course_id || null,
     };
-    if (editingVideo.id) {
-      await api('/api/admin/videos', {
-        method: 'PUT',
-        body: JSON.stringify({ id: editingVideo.id, ...payload }),
-      });
-      notify('Video resource updated.');
-    } else {
-      await api('/api/admin/videos', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      notify('New video added and published.');
+    let savedId = editingVideo.id;
+    try {
+      if (editingVideo.id) {
+        await api(`/api/admin/videos/${editingVideo.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+        notify('Video resource updated.');
+      } else {
+        const res = await api<VideoResource>('/api/admin/videos', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        if (res?.id) savedId = res.id;
+        notify('New video added and published.');
+      }
+    } catch (err) {
+      console.error(err);
     }
+
+    const itemToStore: VideoResource = {
+      id: savedId || Date.now(),
+      title: payload.title,
+      description: payload.description,
+      category: payload.category,
+      video_url: payload.video_url,
+      thumbnail_url: payload.thumbnail_url,
+      placement: payload.placement as any,
+      duration_text: durationVal,
+      display_order: payload.display_order,
+      is_published: payload.is_published,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('olearn_custom_videos') || '[]';
+        const list = (JSON.parse(raw) as any[]).filter((v) => Number(v.id) !== Number(itemToStore.id));
+        list.unshift(itemToStore);
+        localStorage.setItem('olearn_custom_videos', JSON.stringify(list));
+      } catch {}
+    }
+
+    setAdminVideos((prev) => {
+      const filtered = prev.filter((v) => Number(v.id) !== Number(itemToStore.id));
+      return [itemToStore, ...filtered];
+    });
+
     setVideoModalOpen(false);
     setEditingVideo(null);
     refreshPublicSite();
@@ -621,7 +771,20 @@ export function AdminPortal({ section }: { section: AdminSection }) {
 
   const handleDeleteVideo = async (id: number) => {
     if (!window.confirm('Delete this video permanently?')) return;
-    await api(`/api/admin/videos?id=${id}`, { method: 'DELETE' });
+    try {
+      await api(`/api/admin/videos/${id}`, { method: 'DELETE' });
+    } catch {}
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('olearn_custom_videos') || '[]';
+        const list = (JSON.parse(raw) as any[]).filter((v) => Number(v.id) !== Number(id));
+        localStorage.setItem('olearn_custom_videos', JSON.stringify(list));
+        const delRaw = localStorage.getItem('olearn_custom_videos_deleted') || '[]';
+        const delList = Array.from(new Set([...JSON.parse(delRaw), Number(id)]));
+        localStorage.setItem('olearn_custom_videos_deleted', JSON.stringify(delList));
+      } catch {}
+    }
+    setAdminVideos((prev) => prev.filter((v) => Number(v.id) !== Number(id)));
     notify('Video deleted.');
     refreshPublicSite();
     broadcastPlatformUpdate('cms');
@@ -629,11 +792,24 @@ export function AdminPortal({ section }: { section: AdminSection }) {
   };
 
   const handleToggleVideoPublish = async (v: VideoResource) => {
-    await api('/api/admin/videos', {
-      method: 'PUT',
-      body: JSON.stringify({ id: v.id, is_published: v.is_published ? 0 : 1 }),
-    });
-    notify(v.is_published ? 'Video unpublished from live site.' : 'Video published to live site.');
+    const nextPublished = v.is_published ? 0 : 1;
+    try {
+      await api(`/api/admin/videos/${v.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ is_published: nextPublished }),
+      });
+    } catch {}
+    const updated = { ...v, is_published: nextPublished };
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('olearn_custom_videos') || '[]';
+        const list = (JSON.parse(raw) as any[]).map((vid) => Number(vid.id) === Number(v.id) ? updated : vid);
+        if (!list.some((vid) => Number(vid.id) === Number(v.id))) list.push(updated);
+        localStorage.setItem('olearn_custom_videos', JSON.stringify(list));
+      } catch {}
+    }
+    setAdminVideos((prev) => prev.map((vid) => Number(vid.id) === Number(v.id) ? updated : vid));
+    notify(nextPublished ? 'Video published to live site.' : 'Video moved to Draft.');
     refreshPublicSite();
     broadcastPlatformUpdate('cms');
     loadData(true);
@@ -1204,7 +1380,7 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                               </span>
                             </td>
                             <td className="px-5 py-4 text-slate-400 font-mono">
-                              {pdf.file_size || '120 KB'}
+                              {pdf.file_size_text || (pdf as any).file_size || '120 KB'}
                             </td>
                             <td className="px-5 py-4">
                               <button
@@ -1348,7 +1524,7 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                                 <div className="min-w-0">
                                   <h4 className="font-bold text-white text-sm truncate">{vid.title}</h4>
                                   <p className="text-slate-400 text-xs line-clamp-1 mt-0.5">{vid.description || 'No description'}</p>
-                                  <span className="text-[11px] text-slate-500 font-mono">{vid.duration || '5:00'}</span>
+                                  <span className="text-[11px] text-slate-500 font-mono">{vid.duration_text || (vid as any).duration || '02:15'}</span>
                                 </div>
                               </div>
                             </td>
@@ -3052,8 +3228,8 @@ export function AdminPortal({ section }: { section: AdminSection }) {
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">File Size</label>
                 <input
-                  value={editingPdf.file_size || ''}
-                  onChange={(e) => setEditingPdf({ ...editingPdf, file_size: e.target.value })}
+                  value={editingPdf.file_size_text || (editingPdf as any).file_size || ''}
+                  onChange={(e) => setEditingPdf({ ...editingPdf, file_size_text: e.target.value, file_size: e.target.value } as any)}
                   placeholder="e.g. 118 KB"
                   className={inputCls}
                 />
@@ -3208,8 +3384,8 @@ export function AdminPortal({ section }: { section: AdminSection }) {
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Duration</label>
                 <input
-                  value={editingVideo.duration || ''}
-                  onChange={(e) => setEditingVideo({ ...editingVideo, duration: e.target.value })}
+                  value={editingVideo.duration_text || (editingVideo as any).duration || ''}
+                  onChange={(e) => setEditingVideo({ ...editingVideo, duration_text: e.target.value, duration: e.target.value } as any)}
                   placeholder="e.g. 1:24 or 15:00"
                   className={inputCls}
                 />

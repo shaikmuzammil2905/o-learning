@@ -363,6 +363,30 @@ const DEFAULT_VIDEOS: VideoResource[] = [
   },
 ];
 
+export const mergeOverrides = <T extends { id: number }>(base: T[], key: string): T[] => {
+  if (typeof window === 'undefined') return base;
+  try {
+    const deletedRaw = localStorage.getItem(`${key}_deleted`);
+    const deletedSet = new Set<number>(deletedRaw ? JSON.parse(deletedRaw) : []);
+    const localRaw = localStorage.getItem(key);
+    const localItems = (localRaw ? JSON.parse(localRaw) : []) as T[];
+
+    const map = new Map<number, T>();
+    base.forEach((b) => {
+      if (!deletedSet.has(Number(b.id))) map.set(Number(b.id), b);
+    });
+    localItems.forEach((l) => {
+      if (!deletedSet.has(Number(l.id))) {
+        const existing = map.get(Number(l.id));
+        map.set(Number(l.id), existing ? { ...existing, ...l } : l);
+      }
+    });
+    return Array.from(map.values());
+  } catch {
+    return base;
+  }
+};
+
 interface SiteContextValue {
   cms: CmsSettings;
   courses: Course[];
@@ -394,47 +418,20 @@ export function SiteProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [courses, setCourses] = useState<Course[]>(() => {
-    if (typeof window !== 'undefined') {
-      const cached = localStorage.getItem('olearn_cached_courses');
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        } catch {
-          // fallback
-        }
-      }
-    }
-    return DEFAULT_COURSES;
+    return mergeOverrides(DEFAULT_COURSES, 'olearn_custom_courses');
   });
 
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<Category[]>(() => {
+    return mergeOverrides([], 'olearn_custom_categories');
+  });
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [tests, setTests] = useState<TestItem[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [pdfs, setPdfs] = useState<PdfResource[]>(() => {
-    if (typeof window !== 'undefined') {
-      const cached = localStorage.getItem('olearn_cached_pdfs');
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        } catch {}
-      }
-    }
-    return DEFAULT_PDFS;
+    return mergeOverrides(DEFAULT_PDFS, 'olearn_custom_pdfs');
   });
   const [videos, setVideos] = useState<VideoResource[]>(() => {
-    if (typeof window !== 'undefined') {
-      const cached = localStorage.getItem('olearn_cached_videos');
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        } catch {}
-      }
-    }
-    return DEFAULT_VIDEOS;
+    return mergeOverrides(DEFAULT_VIDEOS, 'olearn_custom_videos');
   });
   const [loading, setLoading] = useState(false);
 
@@ -462,32 +459,39 @@ export function SiteProvider({ children }: { children: React.ReactNode }) {
         });
       }
       if (Array.isArray(coursesData) && coursesData.length > 0) {
-        setCourses(coursesData);
+        const merged = mergeOverrides(coursesData, 'olearn_custom_courses');
+        setCourses(merged);
         if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem('olearn_cached_courses', JSON.stringify(coursesData));
+            localStorage.setItem('olearn_cached_courses', JSON.stringify(merged));
           } catch {}
         }
+      } else {
+        setCourses((prev) => mergeOverrides(prev.length > 0 ? prev : DEFAULT_COURSES, 'olearn_custom_courses'));
       }
-      setCategories(Array.isArray(catsData) ? catsData : []);
+
+      const mergedCategories = mergeOverrides(Array.isArray(catsData) ? catsData : [], 'olearn_custom_categories');
+      setCategories(mergedCategories);
       setPlans(Array.isArray(plansData) ? plansData : []);
       setTests(Array.isArray(testsData) ? testsData : []);
       setBatches(Array.isArray(batchesData) ? batchesData : []);
-      if (Array.isArray(pdfsData) && pdfsData.length > 0) {
-        setPdfs(pdfsData);
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('olearn_cached_pdfs', JSON.stringify(pdfsData));
-          } catch {}
-        }
+
+      const activePdfs = Array.isArray(pdfsData) && pdfsData.length > 0 ? pdfsData : DEFAULT_PDFS;
+      const mergedPdfs = mergeOverrides(activePdfs, 'olearn_custom_pdfs');
+      setPdfs(mergedPdfs);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('olearn_cached_pdfs', JSON.stringify(mergedPdfs));
+        } catch {}
       }
-      if (Array.isArray(videosData) && videosData.length > 0) {
-        setVideos(videosData);
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('olearn_cached_videos', JSON.stringify(videosData));
-          } catch {}
-        }
+
+      const activeVideos = Array.isArray(videosData) && videosData.length > 0 ? videosData : DEFAULT_VIDEOS;
+      const mergedVideos = mergeOverrides(activeVideos, 'olearn_custom_videos');
+      setVideos(mergedVideos);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('olearn_cached_videos', JSON.stringify(mergedVideos));
+        } catch {}
       }
     } catch {
       // Keep current database-synced state on transient network failure

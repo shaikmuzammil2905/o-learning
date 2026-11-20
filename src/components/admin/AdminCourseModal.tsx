@@ -187,6 +187,7 @@ export const AdminCourseModal: React.FC<{
           .filter(Boolean),
       };
 
+      let savedCourseId = courseId;
       if (courseId) {
         await api(`/api/admin/courses/${courseId}`, { method: 'PUT', body: JSON.stringify(payload) });
       } else {
@@ -194,8 +195,26 @@ export const AdminCourseModal: React.FC<{
           method: 'POST',
           body: JSON.stringify(payload),
         });
-        setCourseId(created.id);
+        if (created?.id) savedCourseId = created.id;
+        setCourseId(created?.id || Date.now());
       }
+
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem('olearn_custom_courses') || '[]';
+          const list = (JSON.parse(raw) as any[]).filter((c) => c.id !== (savedCourseId || courseId));
+          const courseItem = {
+            id: savedCourseId || courseId || Date.now(),
+            ...payload,
+            category_name: categories.find((c) => c.id === payload.category_id)?.name || 'General',
+            faculty_name: faculty.find((f) => f.id === payload.faculty_id)?.full_name || 'Senior Instructor',
+            created_at: new Date().toISOString(),
+          };
+          list.unshift(courseItem);
+          localStorage.setItem('olearn_custom_courses', JSON.stringify(list));
+        } catch {}
+      }
+
       onSaved();
       onClose();
     } catch (err) {
