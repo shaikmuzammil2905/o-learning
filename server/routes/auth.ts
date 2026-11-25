@@ -83,6 +83,11 @@ async function createStudentAccount(params: {
        VALUES (?, ?, ?, 'successful', ?)`,
       [referrerId, newUserId, cleanRef, rewardAmount]
     );
+    // Credit the referrer's wallet balance
+    await dbRun(
+      'UPDATE users SET credits = COALESCE(credits, 0) + ? WHERE id = ?',
+      [rewardAmount, referrerId]
+    );
     await dbRun(
       `INSERT INTO notifications (user_id, title, message, type)
        VALUES (?, 'Referral Reward Credited!', ?, 'success')`,

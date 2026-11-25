@@ -309,10 +309,19 @@ async function attributeCourseReferral(
 
   if (link.referrer_id) {
     const course = (await dbGet('SELECT title FROM courses WHERE id = ?', [courseId])) as { title: string } | undefined;
+    // Credit the referrer for each course enrollment via their referral
+    const cmsRefEnroll = (await dbGet("SELECT value_json FROM cms_settings WHERE key = 'referral'")) as { value_json: string } | undefined;
+    const perEnrollReward: number = cmsRefEnroll
+      ? (JSON.parse(cmsRefEnroll.value_json).perEnrollReward ?? JSON.parse(cmsRefEnroll.value_json).rewardAmount ?? 150)
+      : 150;
+    (await dbRun(
+      'UPDATE users SET credits = COALESCE(credits, 0) + ? WHERE id = ?',
+      [perEnrollReward, link.referrer_id]
+    ));
     (await dbRun(`
       INSERT INTO notifications (user_id, title, message, type)
-      VALUES (?, 'Course Referral Enrollment!', ?, 'success')
-     RETURNING id`, [link.referrer_id, `A learner enrolled in "${course?.title || 'a course'}" via your referral link (${link.referral_code})!`]));
+      VALUES (?, 'Course Referral Reward Credited!', ?, 'success')
+     RETURNING id`, [link.referrer_id, `A learner enrolled in "${course?.title || 'a course'}" via your referral link. ₹${perEnrollReward} credited to your wallet!`]));
   }
 }
 

@@ -1626,6 +1626,26 @@ router.patch('/redemptions/:id', asyncHandler(async (req, res) => {
     res.status(400).json({ error: 'Invalid redemption status.' });
     return;
   }
+
+  // Deduct credits from user wallet when admin marks redemption as Paid/Approved
+  if (norm && (norm.toLowerCase() === 'paid' || norm.toLowerCase() === 'approved')) {
+    const existing = (await dbGet('SELECT user_id, amount, status FROM redemptions WHERE id = ?', [id])) as
+      | { user_id: number; amount: number; status: string }
+      | undefined;
+    if (existing && existing.status.toLowerCase() !== 'paid' && existing.status.toLowerCase() !== 'approved') {
+      // Only deduct once — skip if already paid/approved
+      (await dbRun(
+        'UPDATE users SET credits = GREATEST(0, COALESCE(credits, 0) - ?) WHERE id = ?',
+        [Number(existing.amount), existing.user_id]
+      ));
+      (await dbRun(
+        `INSERT INTO notifications (user_id, title, message, type)
+         VALUES (?, 'Reward Redemption Processed!', ?, 'success')`,
+        [existing.user_id, `Your redemption request of ₹${existing.amount} has been ${norm}. Credits deducted from your wallet.`]
+      ));
+    }
+  }
+
   (await dbRun(`
     UPDATE redemptions
     SET status = COALESCE(?, status),
