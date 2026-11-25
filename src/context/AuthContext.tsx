@@ -92,7 +92,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refreshUser();
+    let active = true;
+    const fallbackTimer = setTimeout(() => {
+      if (active) setLoading(false);
+    }, 3500);
+
+    refreshUser().finally(() => {
+      clearTimeout(fallbackTimer);
+      if (active) setLoading(false);
+    });
+
+    return () => {
+      active = false;
+      clearTimeout(fallbackTimer);
+    };
   }, [refreshUser]);
 
   const login = async (identifier: string, password: string, rememberMe = true) => {

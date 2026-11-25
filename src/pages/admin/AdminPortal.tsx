@@ -326,6 +326,20 @@ export function AdminPortal({ section }: { section: AdminSection }) {
         api<Array<Record<string, unknown>>>('/api/admin/faculty').catch(() => []),
         api<Array<Record<string, unknown>>>('/api/admin/courses').catch(() => []),
       ]);
+
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem('olearn_custom_categories');
+          if (raw) {
+            const parsed = JSON.parse(raw) as any[];
+            const clean = parsed.filter((c) => Number(c.id) > 0 && Number(c.id) <= 2147483647);
+            if (clean.length !== parsed.length) {
+              localStorage.setItem('olearn_custom_categories', JSON.stringify(clean));
+            }
+          }
+        } catch {}
+      }
+
       setCategories(mergeOverrides(cats as any, 'olearn_custom_categories'));
       setFaculty(facs);
       setCourses(mergeOverrides(cs as any, 'olearn_custom_courses'));
@@ -517,45 +531,100 @@ export function AdminPortal({ section }: { section: AdminSection }) {
     loadData(true);
   };
 
-  const saveCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!catForm.name.trim()) return;
-    const payload = {
-      name: catForm.name.trim(),
-      slug: catForm.slug.trim(),
-      description: catForm.description,
-      image: catForm.image,
-      icon_name: catForm.icon_name,
-      is_active: catForm.is_active ? 1 : 0,
-    };
-    let savedId = catForm.id;
+  const deleteCategory = async (catId: number) => {
+    if (!window.confirm('Are you sure you want to delete this category? Courses belonging to it will become unassigned.')) return;
+    const targetId = Number(catId);
     try {
-      if (catForm.id) {
-        await api(`/api/admin/categories/${catForm.id}`, { method: 'PUT', body: JSON.stringify(payload) });
-        notify('Category updated.');
-      } else {
-        const created = await api<{ id: number }>('/api/admin/categories', { method: 'POST', body: JSON.stringify(payload) });
-        if (created?.id) savedId = created.id;
-        notify('Category created.');
+      if (targetId > 0 && targetId <= 2147483647) {
+        await api(`/api/admin/categories/${targetId}`, { method: 'DELETE' });
       }
-    } catch {}
-    const itemToStore = { id: savedId || Date.now(), ...payload };
+    } catch (err: any) {
+      console.warn('[Category Delete API]', err);
+    }
+
     if (typeof window !== 'undefined') {
       try {
         const raw = localStorage.getItem('olearn_custom_categories') || '[]';
-        const list = (JSON.parse(raw) as any[]).filter((c) => Number(c.id) !== Number(itemToStore.id));
-        list.push(itemToStore);
+        const list = (JSON.parse(raw) as any[]).filter((c) => Number(c.id) !== targetId);
         localStorage.setItem('olearn_custom_categories', JSON.stringify(list));
+
+        const delRaw = localStorage.getItem('olearn_custom_categories_deleted') || '[]';
+        const delList = Array.from(new Set([...JSON.parse(delRaw), targetId]));
+        localStorage.setItem('olearn_custom_categories_deleted', JSON.stringify(delList));
       } catch {}
     }
-    setCategories((prev) => {
-      const filtered = prev.filter((c) => Number(c.id) !== Number(itemToStore.id));
-      return [...filtered, itemToStore];
-    });
-    setCatModalOpen(false);
+
+    setCategories((prev) => prev.filter((c) => Number(c.id) !== targetId));
+    notify('Category deleted.');
     refreshPublicSite();
     broadcastPlatformUpdate('category');
-    loadData(true);
+    await loadData(true);
+  };
+
+  const saveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = catForm.name.trim();
+    if (!name) {
+      alert('Category name is required.');
+      return;
+    }
+    const cleanSlug =
+      catForm.slug.trim()
+        ? catForm.slug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+        : name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+    const payload = {
+      name,
+      slug: cleanSlug,
+      description: catForm.description || '',
+      image: catForm.image || '',
+      icon_name: catForm.icon_name || 'BookOpen',
+      is_active: catForm.is_active ? 1 : 0,
+    };
+
+    try {
+      let savedCat: any = null;
+      if (catForm.id && catForm.id <= 2147483647) {
+        savedCat = await api(`/api/admin/categories/${catForm.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+        notify('Category updated.');
+      } else {
+        savedCat = await api<{ id: number }>('/api/admin/categories', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        notify('Category created.');
+      }
+
+      if (savedCat && savedCat.id) {
+        const itemToStore = { ...payload, id: savedCat.id };
+        if (typeof window !== 'undefined') {
+          try {
+            const delRaw = localStorage.getItem('olearn_custom_categories_deleted') || '[]';
+            const delList = (JSON.parse(delRaw) as any[]).filter((id) => Number(id) !== Number(savedCat.id));
+            localStorage.setItem('olearn_custom_categories_deleted', JSON.stringify(delList));
+
+            const raw = localStorage.getItem('olearn_custom_categories') || '[]';
+            const list = (JSON.parse(raw) as any[]).filter((c) => Number(c.id) !== Number(savedCat.id));
+            list.push(itemToStore);
+            localStorage.setItem('olearn_custom_categories', JSON.stringify(list));
+          } catch {}
+        }
+        setCategories((prev) => {
+          const filtered = prev.filter((c) => Number(c.id) !== Number(savedCat.id));
+          return [...filtered, itemToStore];
+        });
+      }
+
+      setCatModalOpen(false);
+      refreshPublicSite();
+      broadcastPlatformUpdate('category');
+      await loadData(true);
+    } catch (err: any) {
+      alert(err.message || 'Failed to save category. Please ensure name and slug are unique.');
+    }
   };
 
   const saveCmsSettings = async (e?: React.FormEvent) => {
@@ -2036,14 +2105,9 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                           </button>
                           <button
                             type="button"
-                            onClick={async () => {
-                              if (!window.confirm('Delete this category?')) return;
-                              await api(`/api/admin/categories/${cat.id}`, { method: 'DELETE' });
-                              notify('Category deleted.');
-                              refreshPublicSite();
-                              loadData();
-                            }}
+                            onClick={() => deleteCategory(Number(cat.id))}
                             className="rounded-lg bg-rose-500/15 p-1.5 text-rose-400 hover:bg-rose-500/25 cursor-pointer"
+                            title="Delete category"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>

@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Lock, Mail, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, ShieldCheck, UserCheck } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { BrandLogo } from '../BrandLogo';
 import { useAuth } from '../../context/AuthContext';
 
-export function AdminLoginGate() {
+export function AdminLoginGate({ currentNonAdminUser }: { currentNonAdminUser?: { full_name?: string; role?: string } | null }) {
   const { login, logout } = useAuth();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -42,6 +43,22 @@ export function AdminLoginGate() {
             Sign in with your administrator credentials to manage O-Learning Platform.
           </p>
         </div>
+
+        {currentNonAdminUser && (
+          <div className="mb-4 p-3 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs text-blue-200 flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5 font-semibold text-blue-300">
+              <UserCheck className="w-4 h-4 shrink-0 text-blue-400" />
+              <span>Signed in as: {currentNonAdminUser.full_name} ({currentNonAdminUser.role})</span>
+            </div>
+            <p className="text-[11px] text-blue-200/80">
+              This portal requires administrator privileges. Sign in with an admin account below, or{' '}
+              <Link to="/student" className="underline font-bold text-white hover:text-[#FF7A00]">
+                go to Student Portal
+              </Link>
+              .
+            </p>
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-xs font-semibold text-red-300">

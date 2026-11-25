@@ -520,21 +520,49 @@ router.get('/categories', asyncHandler(async (_req, res) => {
 
 router.post('/categories', asyncHandler(async (req, res) => {
   const { name, slug: customSlug, description = '', image = '', icon_name = 'BookOpen', is_active = 1 } = req.body || {};
-  if (!name) {
+  if (!name || !String(name).trim()) {
     res.status(400).json({ error: 'Category name is required.' });
     return;
   }
-  const slug =
-    customSlug && String(customSlug).trim()
-      ? String(customSlug).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-      : String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  const r = (await dbRun('INSERT INTO categories (name, slug, description, image, icon_name, is_active) VALUES (?, ?, ?, ?, ?, ?) RETURNING id', [String(name).trim(), slug, description, image, icon_name, is_active ? 1 : 0]));
+  const cleanName = String(name).trim();
+  const rawSlug = customSlug && String(customSlug).trim() ? String(customSlug) : cleanName;
+  const slug = rawSlug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `cat-${Date.now()}`;
+
+  const existing = await dbGet('SELECT id FROM categories WHERE LOWER(name) = LOWER(?) OR LOWER(slug) = LOWER(?)', [cleanName, slug]);
+  if (existing) {
+    res.status(409).json({ error: 'A category with this name or slug already exists.' });
+    return;
+  }
+
+  const r = (await dbRun(
+    'INSERT INTO categories (name, slug, description, image, icon_name, is_active) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
+    [cleanName, slug, description, image, icon_name, is_active ? 1 : 0]
+  ));
   res.status(201).json((await dbGet('SELECT * FROM categories WHERE id = ?', [Number(r.lastInsertRowid)])));
 }));
 
 const handleUpdateCategory = asyncHandler(async (req: any, res: any) => {
-  const id = Number(req.params.id || req.body.id);
+  const rawId = req.params.id || req.body.id;
+  const id = Number(rawId);
+  if (isNaN(id) || id <= 0 || id > 2147483647) {
+    res.status(400).json({ error: 'Invalid category ID' });
+    return;
+  }
   const b = req.body || {};
+  const cleanName = b.name ? String(b.name).trim() : null;
+  const cleanSlug = b.slug ? String(b.slug).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : null;
+
+  if (cleanName || cleanSlug) {
+    const existing = await dbGet(
+      'SELECT id FROM categories WHERE (LOWER(name) = LOWER(?) OR LOWER(slug) = LOWER(?)) AND id != ?',
+      [cleanName || '', cleanSlug || '', id]
+    );
+    if (existing) {
+      res.status(409).json({ error: 'Another category with this name or slug already exists.' });
+      return;
+    }
+  }
+
   (await dbRun(`
     UPDATE categories
     SET name = COALESCE(?, name),
@@ -543,8 +571,8 @@ const handleUpdateCategory = asyncHandler(async (req: any, res: any) => {
         image = COALESCE(?, image),
         is_active = COALESCE(?, is_active)
     WHERE id = ?
-  `, [b.name ?? null,
-    b.slug ? String(b.slug).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : null,
+  `, [cleanName,
+    cleanSlug,
     b.description ?? null,
     b.image ?? null,
     b.is_active !== undefined ? (b.is_active ? 1 : 0) : null,
@@ -555,9 +583,17 @@ router.put('/categories/:id', handleUpdateCategory);
 router.put('/categories', handleUpdateCategory);
 
 const handleDeleteCategory = asyncHandler(async (req: any, res: any) => {
-  const id = Number(req.params.id || req.query.id || req.body.id);
-  (await dbRun('DELETE FROM categories WHERE id = ?', [id]));
-  res.json({ ok: true });
+  const rawId = req.params.id || req.query.id || req.body.id;
+  const id = Number(rawId);
+  if (isNaN(id) || id <= 0 || id > 2147483647) {
+    // Gracefully handle client-side temporary timestamps or invalid IDs without DB integer overflow
+    res.json({ ok: true, deleted: false, reason: 'Invalid or local-only category ID' });
+    return;
+  }
+  await dbRun('UPDATE courses SET category_id = NULL WHERE category_id = ?', [id]);
+  await dbRun('UPDATE tests SET category_id = NULL WHERE category_id = ?', [id]);
+  const r = await dbRun('DELETE FROM categories WHERE id = ?', [id]);
+  res.json({ ok: true, deleted: (r.changes ?? 0) > 0 });
 });
 router.delete('/categories/:id', handleDeleteCategory);
 router.delete('/categories', handleDeleteCategory);

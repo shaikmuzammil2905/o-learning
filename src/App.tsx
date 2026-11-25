@@ -44,12 +44,15 @@ function RequireRole({ roles, children }: { roles: UserRole[]; children: React.R
     );
   }
   if (!user) {
-    if (roles.length === 1 && roles[0] === 'admin') {
+    if (roles.includes('admin') && roles.length === 1) {
       return <AdminLoginGate />;
     }
     return <Navigate to="/login" replace />;
   }
   if (!roles.includes(user.role)) {
+    if (roles.includes('admin') && roles.length === 1) {
+      return <AdminLoginGate currentNonAdminUser={user} />;
+    }
     if (user.role === 'admin') return <Navigate to="/admin" replace />;
     if (user.role === 'faculty') return <Navigate to="/faculty" replace />;
     return <Navigate to="/student" replace />;
