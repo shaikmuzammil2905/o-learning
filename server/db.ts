@@ -793,8 +793,8 @@ async function seedDatabase(): Promise<void> {
       icon_color: 'orange',
       level: 'Beginner to Advanced',
       duration: '10 Weeks',
-      price: 2499,
-      discount_price: 1299,
+      price: 3000,
+      discount_price: 3000,
       is_free: 0,
       faculty_id: f1,
       what_you_learn: [
@@ -832,87 +832,87 @@ async function seedDatabase(): Promise<void> {
       ],
     },
     {
-      slug: 'competitive-exam-preparation',
-      category_id: catExam,
-      title: 'Competitive Exam Preparation',
-      short_description:
-        'Complete preparation for various competitive examinations through structured lessons, practice tests and expert guidance.',
-      description:
-        'All-in-one structured preparation for SSC CGL, CHSL, Banking (IBPS/SBI), Railways (RRB), and State PSC exams. Covers Quantitative Aptitude, General Awareness, Reasoning, and English with full-length timed mock tests.',
-      thumbnail_url: '/images/courses/competitive-exams.png',
-      icon_name: 'Trophy',
-      icon_color: 'orange',
-      level: 'Intermediate to Pro',
-      duration: '16 Weeks',
-      price: 3999,
-      discount_price: 1999,
-      is_free: 0,
-      faculty_id: f4,
-      what_you_learn: [
-        'Complete syllabus mastery for SSC, Banking, Railways & State PSC exams',
-        'Speed math tricks and shortcut formulas for 2x faster problem solving',
-        'Monthly current affairs digests and static GK capsule notes',
-        'Exam-hall time management through 25+ sectional & full mock tests',
-      ],
-      faqs: [
-        { q: 'Does this cover both Prelims and Mains patterns?', a: 'Yes, lessons and test banks are aligned to the latest 2026 Prelims + Mains patterns.' },
-      ],
-      modules: [
-        {
-          title: 'Module 1: Exam Strategy & General Awareness',
-          lessons: [
-            { title: 'Indian Economy & Union Budget Essentials', type: 'video', dur: 35, preview: 1, text: 'Understand fiscal policy, RBI monetary tools, and high-weightage exam topics.' },
-            { title: 'Current Affairs Monthly Digest Notes', type: 'material', dur: 20, preview: 1, text: 'Curated bullet-point revision sheets for national & international affairs.' },
-          ],
-        },
-        {
-          title: 'Module 2: Speed Arithmetic & Data Interpretation',
-          lessons: [
-            { title: 'Percentages, Profit-Loss & Ratio Shortcuts', type: 'video', dur: 40, preview: 0, text: 'Solve multi-step DI and arithmetic problems in under 35 seconds.' },
-            { title: 'Speed Calculation Drill Assignment', type: 'assignment', dur: 25, preview: 0, text: 'Timed 30-question calculation practice sheet.' },
-          ],
-        },
-      ],
-    },
-    {
-      slug: 'jee-neet-preparation',
+      slug: 'jee-preparation',
       category_id: catSci,
-      title: 'JEE & NEET Preparation',
+      title: 'JEE Preparation',
       short_description:
-        'Concept-based learning, subject preparation, practice questions and examination guidance for aspiring engineering and medical students.',
+        'Comprehensive JEE Main & Advanced preparation covering Physics, Chemistry, and Mathematics with concept videos, DPPs, and mock tests.',
       description:
-        'Build rock-solid conceptual clarity in Physics, Chemistry, Mathematics, and Biology from NCERT fundamentals up to JEE Main/Advanced and NEET UG rank-deciding problems with structured DPPs and doubt support.',
+        'Build rock-solid conceptual clarity in Physics, Chemistry, and Mathematics from NCERT fundamentals up to JEE Main and Advanced rank-deciding problems with structured DPPs and doubt support.',
       thumbnail_url: '/images/courses/jee-neet.png',
       icon_name: 'GraduationCap',
       icon_color: 'blue',
       level: 'Class 11, 12 & Droppers',
       duration: '24 Weeks',
-      price: 5999,
-      discount_price: 2999,
+      price: 12000,
+      discount_price: 12000,
       is_free: 0,
       faculty_id: f2,
       what_you_learn: [
-        'Deep conceptual mastery in Mechanics, Electrodynamics, Organic Chemistry & Calculus/Biology',
+        'Deep conceptual mastery in Mechanics, Electrodynamics, Organic Chemistry & Calculus',
         'Line-by-line NCERT coverage paired with PYQ trend analysis',
         'Daily Practice Problems (DPPs) with step-by-step video solutions',
         'Rank booster mock tests simulating NTA computer-based interface',
       ],
       faqs: [
-        { q: 'Are Biology and Mathematics separate tracks?', a: 'Yes! Modules clearly tag PCM (JEE) and PCB (NEET) chapters so you follow your exact target stream.' },
+        { q: 'Is this focused on JEE Main or Advanced?', a: 'Both! Modules build fundamentals from NCERT up to JEE Main and progress to multi-concept Advanced level problems.' },
       ],
       modules: [
         {
           title: 'Module 1: Mechanics & Kinematics Deep Dive',
           lessons: [
-            { title: 'Vectors, Relative Motion & Projectile Mastery', type: 'video', dur: 45, preview: 1, text: 'Visualize motion in 2D and solve tricky JEE/NEET numericals effortlessly.' },
+            { title: 'Vectors, Relative Motion & Projectile Mastery', type: 'video', dur: 45, preview: 1, text: 'Visualize motion in 2D and solve tricky JEE numericals effortlessly.' },
             { title: 'NCERT & PYQ Formula Handbook', type: 'material', dur: 20, preview: 1, text: 'Complete Mechanics mind-map and formula compilation.' },
           ],
         },
         {
-          title: 'Module 2: Organic Chemistry & Genetics',
+          title: 'Module 2: Calculus & Coordinate Geometry',
           lessons: [
-            { title: 'Reaction Mechanisms & GOC Fundamentals', type: 'video', dur: 42, preview: 0, text: 'Master inductive effect, resonance, hyperconjugation, and stability orders.' },
-            { title: 'NTA Pattern Concept Quiz', type: 'quiz', dur: 25, preview: 0, text: 'Test your conceptual accuracy with negative-marking simulation.' },
+            { title: 'Differential Calculus & Coordinate Tricks', type: 'video', dur: 42, preview: 0, text: 'Master limits, derivatives, tangents, and conic sections.' },
+            { title: 'JEE Pattern Concept Quiz', type: 'quiz', dur: 25, preview: 0, text: 'Test your conceptual accuracy with negative-marking simulation.' },
+          ],
+        },
+      ],
+    },
+    {
+      slug: 'neet-preparation',
+      category_id: catSci,
+      title: 'NEET Preparation',
+      short_description:
+        'Complete NEET UG preparation covering Physics, Chemistry, and Biology (Botany & Zoology) with NCERT line-by-line mastery and mock exams.',
+      description:
+        'Excel in NEET UG medical entrance with in-depth NCERT biology, high-yield physics numericals, and organic/inorganic chemistry drills backed by daily tests.',
+      thumbnail_url: '/images/courses/jee-neet.png',
+      icon_name: 'GraduationCap',
+      icon_color: 'blue',
+      level: 'Class 11, 12 & Droppers',
+      duration: '24 Weeks',
+      price: 12000,
+      discount_price: 12000,
+      is_free: 0,
+      faculty_id: f2,
+      what_you_learn: [
+        'Complete NCERT line-by-line Biology coverage for 360/360 target',
+        'High-yield numerical problem solving in Mechanics, Optics & Electrodynamics',
+        'Organic reaction mechanisms and Inorganic periodic table memory maps',
+        'Full-length 720-mark simulated NEET mock tests with detailed analytics',
+      ],
+      faqs: [
+        { q: 'Does this cover both Botany and Zoology?', a: 'Yes! All NCERT chapters of Botany and Zoology are thoroughly covered with diagrams and PYQs.' },
+      ],
+      modules: [
+        {
+          title: 'Module 1: Human Physiology & Cell Biology',
+          lessons: [
+            { title: 'Digestion, Circulation & Neural Control', type: 'video', dur: 45, preview: 1, text: 'Comprehensive NCERT line-by-line walkthrough with memory tricks.' },
+            { title: 'Biology High-Yield Notes & Mindmaps', type: 'material', dur: 20, preview: 1, text: 'Quick revision sheets for cell division and physiology.' },
+          ],
+        },
+        {
+          title: 'Module 2: Chemistry for Medical Aspirants',
+          lessons: [
+            { title: 'GOC, Biomolecules & Coordination Compounds', type: 'video', dur: 40, preview: 0, text: 'Understand core concepts frequently asked in NEET.' },
+            { title: 'NEET Speed Test Drill', type: 'quiz', dur: 25, preview: 0, text: 'Timed 45-question speed quiz.' },
           ],
         },
       ],
@@ -930,8 +930,8 @@ async function seedDatabase(): Promise<void> {
       icon_color: 'orange',
       level: 'Foundation to Mains',
       duration: '32 Weeks',
-      price: 7999,
-      discount_price: 4499,
+      price: 12000,
+      discount_price: 12000,
       is_free: 0,
       faculty_id: f4,
       what_you_learn: [
@@ -961,6 +961,49 @@ async function seedDatabase(): Promise<void> {
       ],
     },
     {
+      slug: 'competitive-exams',
+      category_id: catExam,
+      title: 'Competitive Exams',
+      short_description:
+        'Complete preparation for various competitive examinations through structured lessons, practice tests and expert guidance.',
+      description:
+        'All-in-one structured preparation for SSC CGL, CHSL, Banking (IBPS/SBI), Railways (RRB), and State PSC exams. Covers Quantitative Aptitude, General Awareness, Reasoning, and English with full-length timed mock tests.',
+      thumbnail_url: '/images/courses/competitive-exams.png',
+      icon_name: 'Trophy',
+      icon_color: 'orange',
+      level: 'Intermediate to Pro',
+      duration: '16 Weeks',
+      price: 10000,
+      discount_price: 10000,
+      is_free: 0,
+      faculty_id: f4,
+      what_you_learn: [
+        'Complete syllabus mastery for SSC, Banking, Railways & State PSC exams',
+        'Speed math tricks and shortcut formulas for 2x faster problem solving',
+        'Monthly current affairs digests and static GK capsule notes',
+        'Exam-hall time management through 25+ sectional & full mock tests',
+      ],
+      faqs: [
+        { q: 'Does this cover both Prelims and Mains patterns?', a: 'Yes, lessons and test banks are aligned to the latest 2026 Prelims + Mains patterns.' },
+      ],
+      modules: [
+        {
+          title: 'Module 1: Exam Strategy & General Awareness',
+          lessons: [
+            { title: 'Indian Economy & Union Budget Essentials', type: 'video', dur: 35, preview: 1, text: 'Understand fiscal policy, RBI monetary tools, and high-weightage exam topics.' },
+            { title: 'Current Affairs Monthly Digest Notes', type: 'material', dur: 20, preview: 1, text: 'Curated bullet-point revision sheets for national & international affairs.' },
+          ],
+        },
+        {
+          title: 'Module 2: Speed Arithmetic & Data Interpretation',
+          lessons: [
+            { title: 'Percentages, Profit-Loss & Ratio Shortcuts', type: 'video', dur: 40, preview: 0, text: 'Solve multi-step DI and arithmetic problems in under 35 seconds.' },
+            { title: 'Speed Calculation Drill Assignment', type: 'assignment', dur: 25, preview: 0, text: 'Timed 30-question calculation practice sheet.' },
+          ],
+        },
+      ],
+    },
+    {
       slug: 'aptitude-and-reasoning',
       category_id: catApt,
       title: 'Aptitude & Reasoning',
@@ -973,8 +1016,8 @@ async function seedDatabase(): Promise<void> {
       icon_color: 'orange',
       level: 'All Levels',
       duration: '8 Weeks',
-      price: 1499,
-      discount_price: 799,
+      price: 3000,
+      discount_price: 3000,
       is_free: 0,
       faculty_id: f2,
       what_you_learn: [
@@ -1006,7 +1049,7 @@ async function seedDatabase(): Promise<void> {
     {
       slug: 'interview-preparation',
       category_id: catApt,
-      title: 'Interview Preparation',
+      title: 'Interview Preparation (IT & Private Jobs)',
       short_description:
         'Prepare for IT and private-sector job interviews with mock interviews, HR questions, self-introduction and communication training.',
       description:
@@ -1016,8 +1059,8 @@ async function seedDatabase(): Promise<void> {
       icon_color: 'orange',
       level: 'Freshers & Experienced',
       duration: '6 Weeks',
-      price: 1999,
-      discount_price: 999,
+      price: 3000,
+      discount_price: 3000,
       is_free: 0,
       faculty_id: f1,
       what_you_learn: [
@@ -1047,9 +1090,9 @@ async function seedDatabase(): Promise<void> {
       ],
     },
     {
-      slug: 'it-and-programming-courses',
+      slug: 'programming-java-python',
       category_id: catIT,
-      title: 'IT & Programming Courses',
+      title: 'Programming (Java & Python)',
       short_description:
         'Learn programming languages and technical skills, including Python, Java and other essential software technologies.',
       description:
@@ -1059,8 +1102,8 @@ async function seedDatabase(): Promise<void> {
       icon_color: 'orange',
       level: 'Beginner to Job-Ready',
       duration: '14 Weeks',
-      price: 4999,
-      discount_price: 2499,
+      price: 10000,
+      discount_price: 10000,
       is_free: 0,
       faculty_id: f3,
       what_you_learn: [
@@ -1085,49 +1128,6 @@ async function seedDatabase(): Promise<void> {
           lessons: [
             { title: 'Classes, Inheritance, Polymorphism & Collections', type: 'video', dur: 45, preview: 0, text: 'Master enterprise Java concepts asked in technical rounds.' },
             { title: 'Mini Project: Student Management CLI', type: 'assignment', dur: 40, preview: 0, text: 'Implement CRUD operations and file persistence.' },
-          ],
-        },
-      ],
-    },
-    {
-      slug: 'career-development-professional-skills',
-      category_id: catApt,
-      title: 'Career Development & Professional Skills',
-      short_description:
-        'Improve workplace communication, presentation skills, confidence and professional abilities.',
-      description:
-        'Accelerate your career growth with executive communication, persuasive business presentations, email etiquette, emotional intelligence, leadership habits, and productivity systems.',
-      thumbnail_url: '/images/courses/career-development.png',
-      icon_name: 'TrendingUp',
-      icon_color: 'orange',
-      level: 'Students & Professionals',
-      duration: '6 Weeks',
-      price: 0,
-      discount_price: 0,
-      is_free: 1,
-      faculty_id: f1,
-      what_you_learn: [
-        'Write crisp, persuasive professional emails and Slack/Teams updates',
-        'Deliver engaging slide presentations with confident stage presence',
-        'Collaborate effectively in cross-functional teams and client calls',
-        'Build goal-setting, time management, and continuous growth habits',
-      ],
-      faqs: [
-        { q: 'Is this course really free?', a: 'Yes! As part of O-LEARNING PLATFORM’s mission for affordable education, our Career Kickstart program is free with an official completion certificate.' },
-      ],
-      modules: [
-        {
-          title: 'Module 1: Workplace Communication & Etiquette',
-          lessons: [
-            { title: 'Executive Email & Meeting Communication', type: 'video', dur: 22, preview: 1, text: 'Stand out at work with clarity, brevity, and professional tone.' },
-            { title: 'Corporate Communication Playbook (PDF)', type: 'material', dur: 12, preview: 1, text: 'Templates for status updates, follow-ups, and feedback.' },
-          ],
-        },
-        {
-          title: 'Module 2: Confidence, Presentations & Growth',
-          lessons: [
-            { title: 'Storytelling with Data & Slide Design', type: 'video', dur: 28, preview: 1, text: 'Structure memorable presentations that inspire action.' },
-            { title: 'Career Roadmap Self-Check Quiz', type: 'quiz', dur: 10, preview: 1, text: 'Quick assessment to unlock your free certificate.' },
           ],
         },
       ],
@@ -1197,6 +1197,11 @@ async function seedDatabase(): Promise<void> {
       }
     }
   }
+
+  // Compatibility aliases for seeded batches and live classes
+  if (courseIds['jee-preparation']) courseIds['jee-neet-preparation'] = courseIds['jee-preparation'];
+  if (courseIds['competitive-exams']) courseIds['competitive-exam-preparation'] = courseIds['competitive-exams'];
+  if (courseIds['programming-java-python']) courseIds['it-and-programming-courses'] = courseIds['programming-java-python'];
 
   // Enroll sample student Aarav in Spoken English & IT Programming
   // Batches

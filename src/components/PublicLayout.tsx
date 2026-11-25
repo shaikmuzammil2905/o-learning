@@ -314,10 +314,10 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   ? courses.slice(0, 5)
                   : [
                       { slug: 'spoken-english', title: 'Spoken English' },
-                      { slug: 'competitive-exam-preparation', title: 'Competitive Exams' },
-                      { slug: 'jee-neet-preparation', title: 'JEE & NEET' },
-                      { slug: 'upsc-preparation', title: 'UPSC' },
-                      { slug: 'it-and-programming-courses', title: 'IT & Programming' },
+                      { slug: 'jee-preparation', title: 'JEE Preparation' },
+                      { slug: 'neet-preparation', title: 'NEET Preparation' },
+                      { slug: 'upsc-preparation', title: 'UPSC Preparation' },
+                      { slug: 'competitive-exams', title: 'Competitive Exams' },
                     ]
                 ).map((c) => (
                   <li key={c.slug}>

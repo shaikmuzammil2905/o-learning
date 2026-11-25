@@ -83,7 +83,16 @@ router.get(
   '/courses/:courseId',
   attachOptionalUser,
   asyncHandler(async (req, res) => {
-    const key = String(req.params.courseId);
+    let key = String(req.params.courseId);
+    const slugAliases: Record<string, string> = {
+      'jee-neet-preparation': 'jee-preparation',
+      'competitive-exam-preparation': 'competitive-exams',
+      'it-and-programming-courses': 'programming-java-python',
+      'career-development-professional-skills': 'interview-preparation',
+    };
+    if (slugAliases[key]) {
+      key = slugAliases[key];
+    }
     const course = await dbGet<Record<string, unknown>>(
       `SELECT c.*, cat.name as category_name, cat.slug as category_slug,
               u.full_name as faculty_name, u.email as faculty_email,
