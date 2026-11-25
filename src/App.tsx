@@ -31,6 +31,7 @@ import { ProfilePage } from './pages/student/ProfilePage';
 // Faculty & Admin Portals
 import { FacultyPortal } from './pages/faculty/FacultyPortal';
 import { AdminPortal } from './pages/admin/AdminPortal';
+import { AdminLoginGate } from './components/admin/AdminLoginGate';
 import type { UserRole } from './types';
 
 function RequireRole({ roles, children }: { roles: UserRole[]; children: React.ReactNode }) {
@@ -42,7 +43,12 @@ function RequireRole({ roles, children }: { roles: UserRole[]; children: React.R
       </div>
     );
   }
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    if (roles.length === 1 && roles[0] === 'admin') {
+      return <AdminLoginGate />;
+    }
+    return <Navigate to="/login" replace />;
+  }
   if (!roles.includes(user.role)) {
     if (user.role === 'admin') return <Navigate to="/admin" replace />;
     if (user.role === 'faculty') return <Navigate to="/faculty" replace />;
