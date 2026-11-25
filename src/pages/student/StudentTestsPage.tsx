@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+  AlertCircle,
   Award,
   CheckCircle2,
   ChevronLeft,
@@ -98,8 +99,13 @@ export function StudentTestsPage() {
 
   const beginExam = () => {
     if (!activeTest) return;
+    if (!questions || questions.length === 0) {
+      alert('This test does not have any questions configured yet. Please try another test or check back later.');
+      return;
+    }
     const totalSecs = (activeTest.duration_minutes || 15) * 60;
     setSecondsLeft(totalSecs);
+    setCurrentQ(0);
     setStage('running');
   };
 
@@ -180,7 +186,7 @@ export function StudentTestsPage() {
                   <p className="text-xs text-slate-500 mt-1 flex-1">{t.description}</p>
                   <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100 text-xs text-slate-600">
                     <span className="flex items-center gap-1">
-                      <FileQuestion className="w-3.5 h-3.5 text-[#0052CC]" /> {t.questions_count || 5} Qs
+                      <FileQuestion className="w-3.5 h-3.5 text-[#0052CC]" /> {t.questions_count ?? 0} Qs
                     </span>
                     <span className="flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-[#FF7A00]" /> {t.duration_minutes}m
@@ -192,9 +198,14 @@ export function StudentTestsPage() {
                   <button
                     type="button"
                     onClick={() => prepareTest(t.id)}
-                    className="mt-4 w-full py-2.5 rounded-xl bg-[#FF7A00] hover:bg-[#E66D00] text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                    className={`mt-4 w-full py-2.5 rounded-xl text-white text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                      Number(t.questions_count || 0) === 0
+                        ? 'bg-slate-400 hover:bg-slate-500'
+                        : 'bg-[#FF7A00] hover:bg-[#E66D00]'
+                    }`}
                   >
-                    <PlayCircle className="w-4 h-4" /> Start Test
+                    <PlayCircle className="w-4 h-4" />
+                    {Number(t.questions_count || 0) === 0 ? 'View Details (0 Qs)' : 'Start Test'}
                   </button>
                 </div>
               ))}
@@ -273,6 +284,19 @@ export function StudentTestsPage() {
             <li>You can jump to any question using the question navigation palette.</li>
             <li>The test will auto-submit automatically when the timer reaches 00:00.</li>
           </ul>
+
+          {questions.length === 0 && (
+            <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 flex items-start gap-3 text-amber-900 text-xs">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-sm text-amber-950 mb-0.5">No Questions Available Yet</p>
+                <p className="text-amber-800 leading-relaxed">
+                  This mock test has been created, but questions have not been uploaded by the instructor yet. You cannot start an empty test.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2">
             <button
               type="button"
@@ -283,17 +307,38 @@ export function StudentTestsPage() {
             </button>
             <button
               type="button"
+              disabled={questions.length === 0}
               onClick={beginExam}
-              className="flex-1 py-3 rounded-xl bg-[#FF7A00] hover:bg-[#E66D00] text-white text-sm font-bold cursor-pointer shadow-md"
+              className={`flex-1 py-3 rounded-xl text-white text-sm font-bold shadow-md transition ${
+                questions.length === 0
+                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
+                  : 'bg-[#FF7A00] hover:bg-[#E66D00] cursor-pointer'
+              }`}
             >
-              Start Test Now →
+              {questions.length === 0 ? 'Cannot Start (0 Questions)' : 'Start Test Now →'}
             </button>
           </div>
         </div>
       )}
 
       {/* RUNNING STAGE */}
-      {stage === 'running' && activeTest && questions[currentQ] && (
+      {stage === 'running' && activeTest && (
+        questions.length === 0 || !questions[currentQ] ? (
+          <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center space-y-4 max-w-md mx-auto my-8">
+            <AlertCircle className="w-12 h-12 text-amber-500 mx-auto" />
+            <h3 className="font-display font-bold text-lg text-slate-900">No Questions in this Test</h3>
+            <p className="text-xs text-slate-600">
+              This test currently has 0 questions configured. Please select another test or try again later.
+            </p>
+            <button
+              type="button"
+              onClick={() => setStage('list')}
+              className="px-6 py-2.5 rounded-xl bg-[#0052CC] text-white text-xs font-bold cursor-pointer"
+            >
+              Back to Tests
+            </button>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-8 bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-6">
             <div className="flex items-center justify-between border-b border-slate-200 pb-4">
@@ -409,6 +454,7 @@ export function StudentTestsPage() {
             </button>
           </div>
         </div>
+        )
       )}
 
       {/* RESULT STAGE */}
