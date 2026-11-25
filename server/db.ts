@@ -1207,7 +1207,7 @@ async function seedDatabase(): Promise<void> {
   // Batches
   const insertBatchSql = `
     INSERT INTO batches (name, course_id, faculty_id, start_date, end_date, timings, total_seats, enrolled_seats, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
   `;
   const b1 = Number(
     (await dbRun(insertBatchSql, [
