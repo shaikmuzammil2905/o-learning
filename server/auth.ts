@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
-import db from './db.js';
+import { dbGet } from './db.js';
 
 const JWT_SECRET =
   process.env.JWT_SECRET ||
@@ -53,7 +53,7 @@ function base64UrlDecode(input: string): string {
   return Buffer.from(padded, 'base64').toString('utf8');
 }
 
-export function signToken(payload: { userId: number; role: string }, expiresInSeconds = 60 * 60 * 24 * 7): string {
+export function signToken(payload: Record<string, unknown>, expiresInSeconds = 60 * 60 * 24 * 7): string {
   const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
   const body = base64UrlEncode(JSON.stringify({ ...payload, exp }));
@@ -64,7 +64,9 @@ export function signToken(payload: { userId: number; role: string }, expiresInSe
   return `${header}.${body}.${base64UrlEncode(signature)}`;
 }
 
-export function verifyToken(token: string): { userId: number; role: string; exp: number } | null {
+export function verifyToken<T extends Record<string, unknown> = { userId: number; role: string; exp: number }>(
+  token: string
+): (T & { exp: number }) | null {
   const parts = token.split('.');
   if (parts.length !== 3) return null;
   const [header, body, sig] = parts;
@@ -79,7 +81,7 @@ export function verifyToken(token: string): { userId: number; role: string; exp:
   try {
     const parsed = JSON.parse(base64UrlDecode(body));
     if (!parsed.exp || parsed.exp < Math.floor(Date.now() / 1000)) return null;
-    return parsed;
+    return parsed as T & { exp: number };
   } catch {
     return null;
   }
@@ -95,24 +97,35 @@ export function extractToken(req: Request): string | null {
   return null;
 }
 
-export function attachOptionalUser(req: Request, _res: Response, next: NextFunction): void {
+export function asyncHandler(
+  fn: (req: Request, res: Response, next: NextFunction) => Promise<void> | void
+) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+}
+
+export async function attachOptionalUser(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const token = extractToken(req);
   if (!token) return next();
   const decoded = verifyToken(token);
   if (!decoded) return next();
-  const user = db
-    .prepare(
-      'SELECT id, full_name, email, mobile, role, avatar_url, referral_code, is_active FROM users WHERE id = ?'
-    )
-    .get(decoded.userId) as AuthUser | undefined;
-  if (user && user.is_active === 1) {
-    req.user = user;
+  try {
+    const user = await dbGet<AuthUser>(
+      'SELECT id, full_name, email, mobile, role, avatar_url, referral_code, is_active FROM users WHERE id = ?',
+      [decoded.userId]
+    );
+    if (user && user.is_active === 1) {
+      req.user = user;
+    }
+  } catch (err) {
+    console.error('[Auth Lookup Error]', err);
   }
   next();
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  attachOptionalUser(req, res, () => {
+  void attachOptionalUser(req, res, () => {
     if (!req.user) {
       res.status(401).json({ error: 'Authentication required. Please log in to continue.' });
       return;

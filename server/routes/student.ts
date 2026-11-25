@@ -1,46 +1,39 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
-import db from '../db.js';
-import { requireAuth, requireRole } from '../auth.js';
+import { dbAll, dbGet, dbRun } from '../db.js';
+import { asyncHandler, requireAuth, requireRole } from '../auth.js';
 
 const router = Router();
 router.use(requireAuth, requireRole('student', 'admin'));
 
-function issueCertificateIfEligible(studentId: number, courseId: number): { issued: boolean; certificate?: unknown } {
-  const enrollment = db
-    .prepare('SELECT * FROM enrollments WHERE student_id = ? AND course_id = ?')
-    .get(studentId, courseId) as { progress_percent: number } | undefined;
+async function issueCertificateIfEligible(studentId: number, courseId: number): Promise<{ issued: boolean; certificate?: unknown }> {
+  const enrollment = (await dbGet('SELECT * FROM enrollments WHERE student_id = ? AND course_id = ?', [studentId, courseId])) as { progress_percent: number } | undefined;
   if (!enrollment || enrollment.progress_percent < 100) return { issued: false };
 
-  const existing = db
-    .prepare('SELECT * FROM certificates WHERE student_id = ? AND course_id = ?')
-    .get(studentId, courseId);
+  const existing = (await dbGet('SELECT * FROM certificates WHERE student_id = ? AND course_id = ?', [studentId, courseId]));
   if (existing) return { issued: false, certificate: existing };
 
-  const user = db.prepare('SELECT full_name FROM users WHERE id = ?').get(studentId) as { full_name: string };
-  const course = db.prepare('SELECT title FROM courses WHERE id = ?').get(courseId) as { title: string };
+  const user = (await dbGet('SELECT full_name FROM users WHERE id = ?', [studentId])) as { full_name: string };
+  const course = (await dbGet('SELECT title FROM courses WHERE id = ?', [courseId])) as { title: string };
   const code = `OLR-CERT-${new Date().getFullYear()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 
-  const res = db
-    .prepare(`
+  const res = (await dbRun(`
       INSERT INTO certificates (certificate_code, student_id, course_id, student_name, course_title, status)
       VALUES (?, ?, ?, ?, ?, 'valid')
-    `)
-    .run(code, studentId, courseId, user.full_name, course.title);
+     RETURNING id`, [code, studentId, courseId, user.full_name, course.title]));
 
-  db.prepare(`
+  (await dbRun(`
     INSERT INTO notifications (user_id, title, message, type)
     VALUES (?, 'Certificate Earned!', ?, 'success')
-  `).run(studentId, `Congratulations! Your official certificate for "${course.title}" (${code}) is ready.`);
+  `, [studentId, `Congratulations! Your official certificate for "${course.title}" (${code}) is ready.`]));
 
-  const cert = db.prepare('SELECT * FROM certificates WHERE id = ?').get(Number(res.lastInsertRowid));
+  const cert = (await dbGet('SELECT * FROM certificates WHERE id = ?', [Number(res.lastInsertRowid)]));
   return { issued: true, certificate: cert };
 }
 
-router.get('/dashboard', (req, res) => {
+router.get('/dashboard', asyncHandler(async (req, res) => {
   const sid = req.user!.id;
-  const enrollments = db
-    .prepare(`
+  const enrollments = (await dbAll(`
       SELECT e.*, c.title, c.slug, c.thumbnail_url, c.duration, c.level,
              u.full_name as faculty_name,
              (SELECT COUNT(*) FROM modules m WHERE m.course_id = c.id) as modules_count,
@@ -50,18 +43,16 @@ router.get('/dashboard', (req, res) => {
       LEFT JOIN users u ON u.id = c.faculty_id
       WHERE e.student_id = ?
       ORDER BY e.enrolled_at DESC
-    `)
-    .all(sid) as Array<Record<string, unknown>>;
+    `, [sid])) as Array<Record<string, unknown>>;
 
   const totalCourses = enrollments.length;
   const completedCourses = enrollments.filter((e) => e.status === 'completed' || Number(e.progress_percent) >= 100).length;
   const inProgressCourses = enrollments.filter((e) => e.status !== 'completed' && Number(e.progress_percent) < 100).length;
   const certificatesCount = (
-    db.prepare("SELECT COUNT(*) as c FROM certificates WHERE student_id = ? AND status = 'valid'").get(sid) as { c: number }
+    (await dbGet("SELECT COUNT(*) as c FROM certificates WHERE student_id = ? AND status = 'valid'", [sid])) as { c: number }
   ).c;
 
-  const liveClasses = db
-    .prepare(`
+  const liveClasses = (await dbAll(`
       SELECT lc.*, c.title as course_title, u.full_name as faculty_name
       FROM live_classes lc
       JOIN courses c ON c.id = lc.course_id
@@ -69,23 +60,18 @@ router.get('/dashboard', (req, res) => {
       WHERE lc.status IN ('live', 'upcoming')
       ORDER BY CASE lc.status WHEN 'live' THEN 0 ELSE 1 END, lc.scheduled_at ASC
       LIMIT 4
-    `)
-    .all();
+    `));
 
-  const activeSub = db
-    .prepare(`
+  const activeSub = (await dbGet(`
       SELECT us.*, sp.name as plan_name, sp.duration_months
       FROM user_subscriptions us
       JOIN subscription_plans sp ON sp.id = us.plan_id
-      WHERE us.student_id = ? AND us.status = 'active' AND datetime(us.expires_at) > datetime('now')
+      WHERE us.student_id = ? AND us.status = 'active' AND us.expires_at > NOW()
       ORDER BY us.expires_at DESC
       LIMIT 1
-    `)
-    .get(sid);
+    `, [sid]));
 
-  const notifications = db
-    .prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 10')
-    .all(sid);
+  const notifications = (await dbAll('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 10', [sid]));
 
   res.json({
     summary: {
@@ -99,12 +85,11 @@ router.get('/dashboard', (req, res) => {
     activeSubscription: activeSub || null,
     notifications,
   });
-});
+}));
 
-router.get('/courses', (req, res) => {
+router.get('/courses', asyncHandler(async (req, res) => {
   const sid = req.user!.id;
-  const enrollments = db
-    .prepare(`
+  const enrollments = (await dbAll(`
       SELECT e.*, c.title, c.slug, c.short_description, c.thumbnail_url, c.duration, c.level,
              u.full_name as faculty_name,
              (SELECT COUNT(*) FROM modules m WHERE m.course_id = c.id) as modules_count,
@@ -114,23 +99,20 @@ router.get('/courses', (req, res) => {
       LEFT JOIN users u ON u.id = c.faculty_id
       WHERE e.student_id = ?
       ORDER BY e.enrolled_at DESC
-    `)
-    .all(sid);
+    `, [sid]));
   res.json(enrollments);
-});
+}));
 
-router.get('/learn/:courseId', (req, res) => {
+router.get('/learn/:courseId', asyncHandler(async (req, res) => {
   const sid = req.user!.id;
   const key = req.params.courseId;
-  const course = db
-    .prepare(`
+  const course = (await dbGet(`
       SELECT c.*, u.full_name as faculty_name, fp.title as faculty_title
       FROM courses c
       LEFT JOIN users u ON u.id = c.faculty_id
       LEFT JOIN faculty_profiles fp ON fp.user_id = u.id
       WHERE c.slug = ? OR c.id = ?
-    `)
-    .get(key, Number(key) || -1) as Record<string, unknown> | undefined;
+    `, [key, Number(key) || -1])) as Record<string, unknown> | undefined;
 
   if (!course) {
     res.status(404).json({ error: 'Course not found.' });
@@ -138,21 +120,15 @@ router.get('/learn/:courseId', (req, res) => {
   }
 
   const courseId = Number(course.id);
-  const enrollment = db
-    .prepare('SELECT * FROM enrollments WHERE student_id = ? AND course_id = ?')
-    .get(sid, courseId) as Record<string, unknown> | undefined;
+  const enrollment = (await dbGet('SELECT * FROM enrollments WHERE student_id = ? AND course_id = ?', [sid, courseId])) as Record<string, unknown> | undefined;
 
   if (!enrollment && req.user!.role !== 'admin') {
     res.status(403).json({ error: 'Please enroll in this course to access the learning area.' });
     return;
   }
 
-  const modules = db
-    .prepare('SELECT * FROM modules WHERE course_id = ? ORDER BY sort_order ASC, id ASC')
-    .all(courseId) as Array<Record<string, unknown>>;
-  const lessons = db
-    .prepare('SELECT * FROM lessons WHERE course_id = ? ORDER BY sort_order ASC, id ASC')
-    .all(courseId) as Array<Record<string, unknown>>;
+  const modules = (await dbAll('SELECT * FROM modules WHERE course_id = ? ORDER BY sort_order ASC, id ASC', [courseId])) as Array<Record<string, unknown>>;
+  const lessons = (await dbAll('SELECT * FROM lessons WHERE course_id = ? ORDER BY sort_order ASC, id ASC', [courseId])) as Array<Record<string, unknown>>;
 
   const completedLessons: number[] = enrollment
     ? JSON.parse(String(enrollment.completed_lessons_json || '[]'))
@@ -163,13 +139,9 @@ router.get('/learn/:courseId', (req, res) => {
     lessons: lessons.filter((l) => Number(l.module_id) === Number(m.id)),
   }));
 
-  const certificate = db
-    .prepare('SELECT * FROM certificates WHERE student_id = ? AND course_id = ?')
-    .get(sid, courseId);
+  const certificate = (await dbGet('SELECT * FROM certificates WHERE student_id = ? AND course_id = ?', [sid, courseId]));
 
-  const notes = db
-    .prepare('SELECT * FROM course_notes WHERE course_id = ? AND is_published = 1 ORDER BY id ASC')
-    .all(courseId) as Array<Record<string, unknown>>;
+  const notes = (await dbAll('SELECT * FROM course_notes WHERE course_id = ? AND is_published = 1 ORDER BY id ASC', [courseId])) as Array<Record<string, unknown>>;
 
   res.json({
     course,
@@ -178,16 +150,14 @@ router.get('/learn/:courseId', (req, res) => {
     notes,
     certificate: certificate || null,
   });
-});
+}));
 
-router.get('/learn/:courseId/notes/:noteId/download', (req, res) => {
+router.get('/learn/:courseId/notes/:noteId/download', asyncHandler(async (req, res) => {
   const sid = req.user!.id;
   const courseId = Number(req.params.courseId);
   const noteId = Number(req.params.noteId);
 
-  const enrollment = db
-    .prepare('SELECT progress_percent FROM enrollments WHERE student_id = ? AND course_id = ?')
-    .get(sid, courseId) as { progress_percent: number } | undefined;
+  const enrollment = (await dbGet('SELECT progress_percent FROM enrollments WHERE student_id = ? AND course_id = ?', [sid, courseId])) as { progress_percent: number } | undefined;
 
   const isCompleted = (enrollment && enrollment.progress_percent === 100) || req.user!.role === 'admin';
   if (!isCompleted) {
@@ -198,9 +168,7 @@ router.get('/learn/:courseId/notes/:noteId/download', (req, res) => {
     return;
   }
 
-  const note = db
-    .prepare('SELECT * FROM course_notes WHERE id = ? AND course_id = ?')
-    .get(noteId, courseId) as Record<string, any> | undefined;
+  const note = (await dbGet('SELECT * FROM course_notes WHERE id = ? AND course_id = ?', [noteId, courseId])) as Record<string, any> | undefined;
 
   if (!note) {
     res.status(404).json({ error: 'Note not found.' });
@@ -212,7 +180,7 @@ router.get('/learn/:courseId/notes/:noteId/download', (req, res) => {
     return;
   }
 
-  const course = db.prepare('SELECT title, short_description FROM courses WHERE id = ?').get(courseId) as
+  const course = (await dbGet('SELECT title, short_description FROM courses WHERE id = ?', [courseId])) as
     | { title: string; short_description: string }
     | undefined;
 
@@ -221,26 +189,22 @@ router.get('/learn/:courseId/notes/:noteId/download', (req, res) => {
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="olearning-${note.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.txt"`);
   res.send(content);
-});
+}));
 
-router.post('/learn/:courseId/lessons/:lessonId/complete', (req, res) => {
+router.post('/learn/:courseId/lessons/:lessonId/complete', asyncHandler(async (req, res) => {
   const sid = req.user!.id;
   const courseId = Number(req.params.courseId);
   const lessonId = Number(req.params.lessonId);
   const { completed = true } = req.body || {};
 
-  const enrollment = db
-    .prepare('SELECT * FROM enrollments WHERE student_id = ? AND course_id = ?')
-    .get(sid, courseId) as { id: number; completed_lessons_json: string } | undefined;
+  const enrollment = (await dbGet('SELECT * FROM enrollments WHERE student_id = ? AND course_id = ?', [sid, courseId])) as { id: number; completed_lessons_json: string } | undefined;
 
   if (!enrollment) {
     res.status(403).json({ error: 'Enrollment not found for this course.' });
     return;
   }
 
-  const allLessons = db
-    .prepare('SELECT id FROM lessons WHERE course_id = ?')
-    .all(courseId) as Array<{ id: number }>;
+  const allLessons = (await dbAll('SELECT id FROM lessons WHERE course_id = ?', [courseId])) as Array<{ id: number }>;
   const validIds = new Set(allLessons.map((l) => l.id));
   if (!validIds.has(lessonId)) {
     res.status(404).json({ error: 'Lesson not found in this course.' });
@@ -259,13 +223,12 @@ router.post('/learn/:courseId/lessons/:lessonId/complete', (req, res) => {
   const status = progress >= 100 ? 'completed' : 'active';
   const completedAt = progress >= 100 ? new Date().toISOString() : null;
 
-  db.prepare(`
+  (await dbRun(`
     UPDATE enrollments
     SET completed_lessons_json = ?, progress_percent = ?, status = ?, completed_at = COALESCE(?, completed_at)
     WHERE id = ?
-  `).run(JSON.stringify(completedList), progress, status, completedAt, enrollment.id);
-
-  const certResult = issueCertificateIfEligible(sid, courseId);
+  `, [JSON.stringify(completedList), progress, status, completedAt, enrollment.id]));
+  const certResult = await issueCertificateIfEligible(sid, courseId);
 
   res.json({
     completed_lessons: completedList,
@@ -274,9 +237,9 @@ router.post('/learn/:courseId/lessons/:lessonId/complete', (req, res) => {
     certificate: certResult.certificate || null,
     newly_issued_certificate: certResult.issued,
   });
-});
+}));
 
-router.post('/courses/:courseId/review', (req, res) => {
+router.post('/courses/:courseId/review', asyncHandler(async (req, res) => {
   const sid = req.user!.id;
   const courseId = Number(req.params.courseId);
   const { rating, comment } = req.body || {};
@@ -285,56 +248,46 @@ router.post('/courses/:courseId/review', (req, res) => {
     res.status(400).json({ error: 'Please provide a rating (1-5) and a comment of at least 5 characters.' });
     return;
   }
-  const enrolled = db
-    .prepare('SELECT id FROM enrollments WHERE student_id = ? AND course_id = ?')
-    .get(sid, courseId);
+  const enrolled = (await dbGet('SELECT id FROM enrollments WHERE student_id = ? AND course_id = ?', [sid, courseId]));
   if (!enrolled) {
     res.status(403).json({ error: 'Only enrolled learners can submit a course review.' });
     return;
   }
-  db.prepare(`
+  (await dbRun(`
     INSERT INTO reviews (course_id, student_id, student_name, rating, comment)
     VALUES (?, ?, ?, ?, ?)
-  `).run(courseId, sid, req.user!.full_name, numRating, String(comment).trim());
+  `, [courseId, sid, req.user!.full_name, numRating, String(comment).trim()]));
   res.status(201).json({ ok: true });
-});
+}));
 
-function attributeCourseReferral(
+async function attributeCourseReferral(
   studentId: number,
   courseId: number,
   rawReferralCode?: unknown,
   paymentId: number | null = null
-): void {
+): Promise<void> {
   const cleanCode = String(rawReferralCode || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
   if (!cleanCode) return;
 
   // Validate against course_referral_links or user referral_code
-  let link = db
-    .prepare("SELECT * FROM course_referral_links WHERE UPPER(referral_code) = ? AND status = 'active'")
-    .get(cleanCode) as
+  let link = (await dbGet("SELECT * FROM course_referral_links WHERE UPPER(referral_code) = ? AND status = 'active'", [cleanCode])) as
     | { id: number; course_id: number; referrer_id: number | null; referral_code: string }
     | undefined;
 
   if (!link) {
-    const refOwner = db
-      .prepare('SELECT id FROM users WHERE UPPER(referral_code) = ? AND is_active = 1')
-      .get(cleanCode) as { id: number } | undefined;
+    const refOwner = (await dbGet('SELECT id FROM users WHERE UPPER(referral_code) = ? AND is_active = 1', [cleanCode])) as { id: number } | undefined;
     if (!refOwner) return; // Invalid referral code -> ignore safely
 
     const generatedCode = `${cleanCode}-${courseId}`;
-    const existingLink = db
-      .prepare('SELECT * FROM course_referral_links WHERE referral_code = ?')
-      .get(generatedCode) as typeof link;
+    const existingLink = (await dbGet('SELECT * FROM course_referral_links WHERE referral_code = ?', [generatedCode])) as typeof link;
     if (existingLink) {
       link = existingLink;
     } else {
-      db.prepare(`
+      (await dbRun(`
         INSERT INTO course_referral_links (course_id, referrer_id, referral_code, clicks, enrollments_count, status)
         VALUES (?, ?, ?, 1, 0, 'active')
-      `).run(courseId, refOwner.id, generatedCode);
-      link = db
-        .prepare('SELECT * FROM course_referral_links WHERE referral_code = ?')
-        .get(generatedCode) as typeof link;
+      `, [courseId, refOwner.id, generatedCode]));
+      link = (await dbGet('SELECT * FROM course_referral_links WHERE referral_code = ?', [generatedCode])) as typeof link;
     }
   }
 
@@ -343,55 +296,43 @@ function attributeCourseReferral(
   if (link.referrer_id && link.referrer_id === studentId) return;
 
   // Prevent duplicate attribution for the same student + course
-  const dup = db
-    .prepare('SELECT id FROM course_referral_attributions WHERE course_id = ? AND referred_user_id = ?')
-    .get(courseId, studentId);
+  const dup = (await dbGet('SELECT id FROM course_referral_attributions WHERE course_id = ? AND referred_user_id = ?', [courseId, studentId]));
   if (dup) return;
 
-  db.prepare(`
+  (await dbRun(`
     INSERT INTO course_referral_attributions (course_id, referral_code, referrer_id, referred_user_id, payment_id)
     VALUES (?, ?, ?, ?, ?)
-  `).run(courseId, link.referral_code, link.referrer_id, studentId, paymentId);
+  `, [courseId, link.referral_code, link.referrer_id, studentId, paymentId]));
 
-  db.prepare('UPDATE course_referral_links SET enrollments_count = enrollments_count + 1 WHERE id = ?').run(link.id);
-  db.prepare(
-    "INSERT INTO referral_events (course_id, referral_code, event_type, actor_user_id) VALUES (?, ?, 'course_enrollment', ?)"
-  ).run(courseId, link.referral_code, studentId);
+  (await dbRun('UPDATE course_referral_links SET enrollments_count = enrollments_count + 1 WHERE id = ?', [link.id]));
+  (await dbRun("INSERT INTO referral_events (course_id, referral_code, event_type, actor_user_id) VALUES (?, ?, 'course_enrollment', ?)", [courseId, link.referral_code, studentId]));
 
   if (link.referrer_id) {
-    const course = db.prepare('SELECT title FROM courses WHERE id = ?').get(courseId) as { title: string } | undefined;
-    db.prepare(`
+    const course = (await dbGet('SELECT title FROM courses WHERE id = ?', [courseId])) as { title: string } | undefined;
+    (await dbRun(`
       INSERT INTO notifications (user_id, title, message, type)
       VALUES (?, 'Course Referral Enrollment!', ?, 'success')
-    `).run(link.referrer_id, `A learner enrolled in "${course?.title || 'a course'}" via your referral link (${link.referral_code})!`);
+     RETURNING id`, [link.referrer_id, `A learner enrolled in "${course?.title || 'a course'}" via your referral link (${link.referral_code})!`]));
   }
 }
 
-router.post('/enroll/free', (req, res) => {
+router.post('/enroll/free', asyncHandler(async (req, res) => {
   const sid = req.user!.id;
   const { course_id, batch_id, referral_code } = req.body || {};
-  const course = db
-    .prepare('SELECT * FROM courses WHERE id = ? AND is_published = 1')
-    .get(Number(course_id)) as { id: number; title: string; is_free: number; price: number; discount_price: number | null } | undefined;
+  const course = (await dbGet('SELECT * FROM courses WHERE id = ? AND is_published = 1', [Number(course_id)])) as { id: number; title: string; is_free: number; price: number; discount_price: number | null } | undefined;
 
   if (!course) {
     res.status(404).json({ error: 'Course not found.' });
     return;
   }
 
-  const existing = db
-    .prepare('SELECT id FROM enrollments WHERE student_id = ? AND course_id = ?')
-    .get(sid, course.id);
+  const existing = (await dbGet('SELECT id FROM enrollments WHERE student_id = ? AND course_id = ?', [sid, course.id]));
   if (existing) {
     res.json({ ok: true, alreadyEnrolled: true, course_id: course.id });
     return;
   }
 
-  const activeSub = db
-    .prepare(
-      "SELECT id FROM user_subscriptions WHERE student_id = ? AND status = 'active' AND datetime(expires_at) > datetime('now')"
-    )
-    .get(sid);
+  const activeSub = (await dbGet("SELECT id FROM user_subscriptions WHERE student_id = ? AND status = 'active' AND expires_at > NOW()", [sid]));
 
   const effectivePrice = course.discount_price ?? course.price;
   if (course.is_free !== 1 && effectivePrice > 0 && !activeSub) {
@@ -399,26 +340,26 @@ router.post('/enroll/free', (req, res) => {
     return;
   }
 
-  db.prepare(`
+  (await dbRun(`
     INSERT INTO enrollments (student_id, course_id, batch_id, status, progress_percent, completed_lessons_json)
     VALUES (?, ?, ?, 'active', 0, '[]')
-  `).run(sid, course.id, batch_id ? Number(batch_id) : null);
+  `, [sid, course.id, batch_id ? Number(batch_id) : null]));
 
   if (batch_id) {
-    db.prepare('UPDATE batches SET enrolled_seats = enrolled_seats + 1 WHERE id = ?').run(Number(batch_id));
+    (await dbRun('UPDATE batches SET enrolled_seats = enrolled_seats + 1 WHERE id = ?', [Number(batch_id)]));
   }
 
-  attributeCourseReferral(sid, course.id, referral_code, null);
+  await attributeCourseReferral(sid, course.id, referral_code, null);
 
-  db.prepare(`
+  (await dbRun(`
     INSERT INTO notifications (user_id, title, message, type)
     VALUES (?, 'Enrollment Confirmed!', ?, 'success')
-  `).run(sid, `You are now enrolled in "${course.title}". Start learning inside My Courses!`);
+  `, [sid, `You are now enrolled in "${course.title}". Start learning inside My Courses!`]));
 
   res.status(201).json({ ok: true, course_id: course.id });
-});
+}));
 
-router.post('/checkout', async (req, res) => {
+router.post('/checkout', asyncHandler(async (req, res) => {
   const sid = req.user!.id;
   const { item_type, item_id, method = 'UPI' } = req.body || {};
   const validMethods = ['UPI', 'Card', 'NetBanking', 'Wallet'];
@@ -433,16 +374,12 @@ router.post('/checkout', async (req, res) => {
   let finalAmount = 0;
 
   if (item_type === 'course') {
-    const course = db
-      .prepare('SELECT * FROM courses WHERE id = ? AND is_published = 1')
-      .get(Number(item_id)) as { id: number; title: string; price: number; discount_price: number | null; is_free: number } | undefined;
+    const course = (await dbGet('SELECT * FROM courses WHERE id = ? AND is_published = 1', [Number(item_id)])) as { id: number; title: string; price: number; discount_price: number | null; is_free: number } | undefined;
     if (!course) {
       res.status(404).json({ error: 'Course not found.' });
       return;
     }
-    const already = db
-      .prepare('SELECT id FROM enrollments WHERE student_id = ? AND course_id = ?')
-      .get(sid, course.id);
+    const already = (await dbGet('SELECT id FROM enrollments WHERE student_id = ? AND course_id = ?', [sid, course.id]));
     if (already) {
       res.status(409).json({ error: 'You are already enrolled in this course.' });
       return;
@@ -452,9 +389,7 @@ router.post('/checkout', async (req, res) => {
     finalAmount = course.is_free ? 0 : course.discount_price ?? course.price;
     discountAmount = Math.max(0, amount - finalAmount);
   } else if (item_type === 'subscription') {
-    const plan = db
-      .prepare('SELECT * FROM subscription_plans WHERE id = ? AND is_active = 1')
-      .get(Number(item_id)) as { id: number; name: string; price: number } | undefined;
+    const plan = (await dbGet('SELECT * FROM subscription_plans WHERE id = ? AND is_active = 1', [Number(item_id)])) as { id: number; name: string; price: number } | undefined;
     if (!plan) {
       res.status(404).json({ error: 'Subscription plan not found.' });
       return;
@@ -469,14 +404,12 @@ router.post('/checkout', async (req, res) => {
   }
 
   const orderRef = `ORD-${new Date().getFullYear()}-${crypto.randomInt(100000, 999999)}`;
-  const resInsert = db
-    .prepare(`
+  const resInsert = (await dbRun(`
       INSERT INTO payments (order_ref, student_id, item_type, item_id, item_title, amount, discount_amount, final_amount, method, status, gateway_txn_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', '')
-    `)
-    .run(orderRef, sid, item_type, Number(item_id), itemTitle, amount, discountAmount, finalAmount, method);
+     RETURNING id`, [orderRef, sid, item_type, Number(item_id), itemTitle, amount, discountAmount, finalAmount, method]));
 
-  const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(Number(resInsert.lastInsertRowid)) as {
+  const payment = (await dbGet('SELECT * FROM payments WHERE id = ?', [Number(resInsert.lastInsertRowid)])) as {
     id: number;
     order_ref: string;
     final_amount: number;
@@ -534,9 +467,9 @@ router.post('/checkout', async (req, res) => {
       currency: razorpayOrder?.currency || 'INR',
     },
   });
-});
+}));
 
-router.post('/payments/:paymentId/verify', (req, res) => {
+router.post('/payments/:paymentId/verify', asyncHandler(async (req, res) => {
   const sid = req.user!.id;
   const paymentId = Number(req.params.paymentId);
   const {
@@ -549,9 +482,7 @@ router.post('/payments/:paymentId/verify', (req, res) => {
     razorpay_signature,
   } = req.body || {};
 
-  const payment = db
-    .prepare('SELECT * FROM payments WHERE id = ? AND student_id = ?')
-    .get(paymentId, sid) as
+  const payment = (await dbGet('SELECT * FROM payments WHERE id = ? AND student_id = ?', [paymentId, sid])) as
     | {
         id: number;
         order_ref: string;
@@ -606,30 +537,24 @@ router.post('/payments/:paymentId/verify', (req, res) => {
   }
 
   if (simulate === 'fail') {
-    db.prepare("UPDATE payments SET status = 'failed', gateway_txn_id = ? WHERE id = ?").run(
-      `FAIL-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
-      payment.id
-    );
-    const failed = db.prepare('SELECT * FROM payments WHERE id = ?').get(payment.id);
+    (await dbRun("UPDATE payments SET status = 'failed', gateway_txn_id = ? WHERE id = ?", [`FAIL-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
+      payment.id]));
+    const failed = (await dbGet('SELECT * FROM payments WHERE id = ?', [payment.id]));
     res.status(402).json({ error: 'Payment could not be completed. Please try again.', payment: failed });
     return;
   }
 
   if (simulate === 'cancel') {
-    db.prepare("UPDATE payments SET status = 'cancelled', gateway_txn_id = ? WHERE id = ?").run(
-      `CXL-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
-      payment.id
-    );
-    const cancelled = db.prepare('SELECT * FROM payments WHERE id = ?').get(payment.id);
+    (await dbRun("UPDATE payments SET status = 'cancelled', gateway_txn_id = ? WHERE id = ?", [`CXL-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
+      payment.id]));
+    const cancelled = (await dbGet('SELECT * FROM payments WHERE id = ?', [payment.id]));
     res.status(402).json({ error: 'Payment was cancelled.', payment: cancelled });
     return;
   }
 
   // Re-verify price integrity against current DB course/subscription record before marking successful
   if (payment.item_type === 'course') {
-    const liveCourse = db
-      .prepare('SELECT id, is_published, is_free, price, discount_price FROM courses WHERE id = ?')
-      .get(payment.item_id) as { id: number; is_published: number; is_free: number; price: number; discount_price: number | null } | undefined;
+    const liveCourse = (await dbGet('SELECT id, is_published, is_free, price, discount_price FROM courses WHERE id = ?', [payment.item_id])) as { id: number; is_published: number; is_free: number; price: number; discount_price: number | null } | undefined;
     if (!liveCourse || liveCourse.is_published !== 1) {
       res.status(409).json({ error: 'Course is no longer published.' });
       return;
@@ -642,65 +567,56 @@ router.post('/payments/:paymentId/verify', (req, res) => {
   }
 
   const txnId = razorpay_payment_id || `${payment.method.toUpperCase()}-OLR-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
-  db.prepare("UPDATE payments SET status = 'successful', gateway_txn_id = ? WHERE id = ?").run(txnId, payment.id);
+  (await dbRun("UPDATE payments SET status = 'successful', gateway_txn_id = ? WHERE id = ?", [txnId, payment.id]));
 
   if (payment.item_type === 'course') {
-    const existing = db
-      .prepare('SELECT id FROM enrollments WHERE student_id = ? AND course_id = ?')
-      .get(sid, payment.item_id);
+    const existing = (await dbGet('SELECT id FROM enrollments WHERE student_id = ? AND course_id = ?', [sid, payment.item_id]));
     if (!existing) {
-      db.prepare(`
+      (await dbRun(`
         INSERT INTO enrollments (student_id, course_id, batch_id, status, progress_percent, completed_lessons_json)
         VALUES (?, ?, ?, 'active', 0, '[]')
-      `).run(sid, payment.item_id, batch_id ? Number(batch_id) : null);
+      `, [sid, payment.item_id, batch_id ? Number(batch_id) : null]));
       if (batch_id) {
-        db.prepare('UPDATE batches SET enrolled_seats = enrolled_seats + 1 WHERE id = ?').run(Number(batch_id));
+        (await dbRun('UPDATE batches SET enrolled_seats = enrolled_seats + 1 WHERE id = ?', [Number(batch_id)]));
       }
-      attributeCourseReferral(sid, payment.item_id, referral_code, payment.id);
+      await attributeCourseReferral(sid, payment.item_id, referral_code, payment.id);
     }
   } else if (payment.item_type === 'subscription') {
-    const plan = db
-      .prepare('SELECT duration_months FROM subscription_plans WHERE id = ?')
-      .get(payment.item_id) as { duration_months: number };
+    const plan = (await dbGet('SELECT duration_months FROM subscription_plans WHERE id = ?', [payment.item_id])) as { duration_months: number };
     const expires = new Date();
     expires.setMonth(expires.getMonth() + (plan?.duration_months || 3));
-    db.prepare("UPDATE user_subscriptions SET status = 'expired' WHERE student_id = ? AND status = 'active'").run(sid);
-    db.prepare(`
+    (await dbRun("UPDATE user_subscriptions SET status = 'expired' WHERE student_id = ? AND status = 'active'", [sid]));
+    (await dbRun(`
       INSERT INTO user_subscriptions (student_id, plan_id, status, expires_at, payment_id)
       VALUES (?, ?, 'active', ?, ?)
-    `).run(sid, payment.item_id, expires.toISOString(), payment.id);
+    `, [sid, payment.item_id, expires.toISOString(), payment.id]));
   }
 
-  db.prepare(`
+  (await dbRun(`
     INSERT INTO notifications (user_id, title, message, type)
     VALUES (?, 'Payment Successful', ?, 'success')
-  `).run(sid, `Payment of ₹${payment.final_amount} for "${payment.item_title}" (${payment.order_ref}) was verified.`);
+  `, [sid, `Payment of ₹${payment.final_amount} for "${payment.item_title}" (${payment.order_ref}) was verified.`]));
 
-  const updated = db.prepare('SELECT * FROM payments WHERE id = ?').get(payment.id);
+  const updated = (await dbGet('SELECT * FROM payments WHERE id = ?', [payment.id]));
   res.json({ payment: updated, verified: true });
-});
+}));
 
-router.get('/payments', (req, res) => {
+router.get('/payments', asyncHandler(async (req, res) => {
   const sid = req.user!.id;
-  const payments = db
-    .prepare('SELECT * FROM payments WHERE student_id = ? ORDER BY created_at DESC')
-    .all(sid);
-  const activeSubscription = db
-    .prepare(`
+  const payments = (await dbAll('SELECT * FROM payments WHERE student_id = ? ORDER BY created_at DESC', [sid]));
+  const activeSubscription = (await dbGet(`
       SELECT us.*, sp.name as plan_name, sp.price, sp.duration_months
       FROM user_subscriptions us
       JOIN subscription_plans sp ON sp.id = us.plan_id
-      WHERE us.student_id = ? AND us.status = 'active' AND datetime(us.expires_at) > datetime('now')
+      WHERE us.student_id = ? AND us.status = 'active' AND us.expires_at > NOW()
       ORDER BY us.expires_at DESC
       LIMIT 1
-    `)
-    .get(sid);
+    `, [sid]));
   res.json({ payments, activeSubscription: activeSubscription || null });
-});
+}));
 
-router.get('/live-classes', (_req, res) => {
-  const classes = db
-    .prepare(`
+router.get('/live-classes', asyncHandler(async (_req, res) => {
+  const classes = (await dbAll(`
       SELECT lc.*, c.title as course_title, u.full_name as faculty_name, b.name as batch_name
       FROM live_classes lc
       JOIN courses c ON c.id = lc.course_id
@@ -708,53 +624,44 @@ router.get('/live-classes', (_req, res) => {
       LEFT JOIN batches b ON b.id = lc.batch_id
       WHERE lc.status != 'cancelled'
       ORDER BY CASE lc.status WHEN 'live' THEN 0 WHEN 'upcoming' THEN 1 ELSE 2 END, lc.scheduled_at ASC
-    `)
-    .all();
+    `));
   res.json(classes);
-});
+}));
 
-router.get('/tests', (req, res) => {
+router.get('/tests', asyncHandler(async (req, res) => {
   const sid = req.user!.id;
-  const tests = db
-    .prepare(`
+  const tests = (await dbAll(`
       SELECT t.*, c.title as course_title,
              (SELECT COUNT(*) FROM questions q WHERE q.test_id = t.id) as questions_count
       FROM tests t
       LEFT JOIN courses c ON c.id = t.course_id
       WHERE t.is_published = 1
       ORDER BY t.id ASC
-    `)
-    .all();
-  const attempts = db
-    .prepare(`
+    `));
+  const attempts = (await dbAll(`
       SELECT ta.*, t.title as test_title
       FROM test_attempts ta
       JOIN tests t ON t.id = ta.test_id
       WHERE ta.student_id = ?
       ORDER BY ta.submitted_at DESC
-    `)
-    .all(sid);
+    `, [sid]));
   res.json({ tests, attempts });
-});
+}));
 
-router.get('/tests/:testId/start', (req, res) => {
-  const test = db
-    .prepare(`
+router.get('/tests/:testId/start', asyncHandler(async (req, res) => {
+  const test = (await dbGet(`
       SELECT t.*, c.title as course_title
       FROM tests t
       LEFT JOIN courses c ON c.id = t.course_id
       WHERE t.id = ? AND t.is_published = 1
-    `)
-    .get(Number(req.params.testId));
+    `, [Number(req.params.testId)]));
 
   if (!test) {
     res.status(404).json({ error: 'Test not found or not currently published.' });
     return;
   }
 
-  const questions = db
-    .prepare('SELECT id, test_id, question_text, options_json, marks, sort_order FROM questions WHERE test_id = ? ORDER BY sort_order ASC, id ASC')
-    .all(Number(req.params.testId)) as Array<Record<string, unknown>>;
+  const questions = (await dbAll('SELECT id, test_id, question_text, options_json, marks, sort_order FROM questions WHERE test_id = ? ORDER BY sort_order ASC, id ASC', [Number(req.params.testId)])) as Array<Record<string, unknown>>;
 
   res.json({
     test,
@@ -763,14 +670,14 @@ router.get('/tests/:testId/start', (req, res) => {
       options: JSON.parse(String(q.options_json || '[]')),
     })),
   });
-});
+}));
 
-router.post('/tests/:testId/submit', (req, res) => {
+router.post('/tests/:testId/submit', asyncHandler(async (req, res) => {
   const sid = req.user!.id;
   const testId = Number(req.params.testId);
   const { answers = {}, time_taken_seconds = 0 } = req.body || {};
 
-  const test = db.prepare('SELECT * FROM tests WHERE id = ? AND is_published = 1').get(testId) as
+  const test = (await dbGet('SELECT * FROM tests WHERE id = ? AND is_published = 1', [testId])) as
     | { id: number; total_marks: number; negative_marks: number; pass_marks: number; title: string }
     | undefined;
   if (!test) {
@@ -778,9 +685,7 @@ router.post('/tests/:testId/submit', (req, res) => {
     return;
   }
 
-  const questions = db
-    .prepare('SELECT * FROM questions WHERE test_id = ? ORDER BY sort_order ASC, id ASC')
-    .all(testId) as Array<{
+  const questions = (await dbAll('SELECT * FROM questions WHERE test_id = ? ORDER BY sort_order ASC, id ASC', [testId])) as Array<{
     id: number;
     question_text: string;
     options_json: string;
@@ -828,19 +733,14 @@ router.post('/tests/:testId/submit', (req, res) => {
   const percentage = Math.max(0, Math.round((score / maxMarks) * 100));
 
   const betterAttempts = (
-    db
-      .prepare('SELECT COUNT(*) as c FROM test_attempts WHERE test_id = ? AND score > ?')
-      .get(testId, score) as { c: number }
+    (await dbGet('SELECT COUNT(*) as c FROM test_attempts WHERE test_id = ? AND score > ?', [testId, score])) as { c: number }
   ).c;
   const rank = betterAttempts + 1;
 
-  const insertAttempt = db
-    .prepare(`
+  const insertAttempt = (await dbRun(`
       INSERT INTO test_attempts (test_id, student_id, answers_json, score, total_marks, correct_count, wrong_count, unanswered_count, percentage, rank, time_taken_seconds)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `)
-    .run(
-      testId,
+     RETURNING id`, [testId,
       sid,
       JSON.stringify(answers),
       score,
@@ -850,41 +750,36 @@ router.post('/tests/:testId/submit', (req, res) => {
       unansweredCount,
       percentage,
       rank,
-      Number(time_taken_seconds) || 0
-    );
+      Number(time_taken_seconds) || 0]));
 
-  const attempt = db.prepare('SELECT * FROM test_attempts WHERE id = ?').get(Number(insertAttempt.lastInsertRowid));
+  const attempt = (await dbGet('SELECT * FROM test_attempts WHERE id = ?', [Number(insertAttempt.lastInsertRowid)]));
   res.status(201).json({ attempt, breakdown, passed: score >= test.pass_marks });
-});
+}));
 
-router.get('/results', (req, res) => {
+router.get('/results', asyncHandler(async (req, res) => {
   const sid = req.user!.id;
-  const rows = db
-    .prepare(`
+  const rows = (await dbAll(`
       SELECT ta.*, t.title as test_title, t.pass_marks, t.difficulty, c.title as course_title
       FROM test_attempts ta
       JOIN tests t ON t.id = ta.test_id
       LEFT JOIN courses c ON c.id = t.course_id
       WHERE ta.student_id = ?
       ORDER BY ta.submitted_at DESC
-    `)
-    .all(sid);
+    `, [sid]));
   res.json(rows);
-});
+}));
 
-router.get('/referrals', (req, res) => {
+router.get('/referrals', asyncHandler(async (req, res) => {
   const sid = req.user!.id;
-  const list = db
-    .prepare(`
+  const list = (await dbAll(`
       SELECT r.*, u.full_name as referred_name, u.created_at as joined_at
       FROM referrals r
       JOIN users u ON u.id = r.referred_user_id
       WHERE r.referrer_id = ?
       ORDER BY r.created_at DESC
-    `)
-    .all(sid) as Array<{ status: string; reward_amount: number }>;
+    `, [sid])) as Array<{ status: string; reward_amount: number }>;
 
-  const cmsRef = db.prepare("SELECT value_json FROM cms_settings WHERE key = 'referral'").get() as
+  const cmsRef = (await dbGet("SELECT value_json FROM cms_settings WHERE key = 'referral'")) as
     | { value_json: string }
     | undefined;
   const config = cmsRef ? JSON.parse(cmsRef.value_json) : { rewardAmount: 250, discountPercent: 10, headline: 'Invite Friends & Earn Rewards!' };
@@ -895,16 +790,14 @@ router.get('/referrals', (req, res) => {
     .filter((r) => r.status === 'successful')
     .reduce((sum, r) => sum + Number(r.reward_amount || 0), 0);
 
-  const courseShares = db
-    .prepare(`
+  const courseShares = (await dbAll(`
       SELECT crl.*, c.title as course_title, c.slug as course_slug, c.short_description,
              c.thumbnail_url, c.price, c.discount_price, c.is_free
       FROM course_referral_links crl
       JOIN courses c ON c.id = crl.course_id
       WHERE crl.referrer_id = ?
       ORDER BY crl.created_at DESC
-    `)
-    .all(sid) as Array<{ clicks: number; enrollments_count: number }>;
+    `, [sid])) as Array<{ clicks: number; enrollments_count: number }>;
 
   const courseStats = {
     coursesShared: courseShares.length,
@@ -912,8 +805,7 @@ router.get('/referrals', (req, res) => {
     successfulEnrollments: courseShares.reduce((s, r) => s + Number(r.enrollments_count || 0), 0),
   };
 
-  const recentEvents = db
-    .prepare(`
+  const recentEvents = (await dbAll(`
       SELECT re.event_type, re.referral_code, re.created_at, c.title as course_title
       FROM referral_events re
       JOIN course_referral_links crl ON crl.referral_code = re.referral_code
@@ -921,8 +813,7 @@ router.get('/referrals', (req, res) => {
       WHERE crl.referrer_id = ?
       ORDER BY re.created_at DESC
       LIMIT 15
-    `)
-    .all(sid);
+    `, [sid]));
 
   res.json({
     referral_code: req.user!.referral_code,
@@ -937,26 +828,24 @@ router.get('/referrals', (req, res) => {
     courseStats,
     recentEvents,
   });
-});
+}));
 
-router.get('/certificates', (req, res) => {
+router.get('/certificates', asyncHandler(async (req, res) => {
   const sid = req.user!.id;
-  const certs = db
-    .prepare(`
+  const certs = (await dbAll(`
       SELECT cert.*, c.duration as course_duration, c.level as course_level
       FROM certificates cert
       LEFT JOIN courses c ON c.id = cert.course_id
       WHERE cert.student_id = ?
       ORDER BY cert.issued_at DESC
-    `)
-    .all(sid);
+    `, [sid]));
   res.json(certs);
-});
+}));
 
-router.post('/notifications/read', (req, res) => {
-  db.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ?').run(req.user!.id);
+router.post('/notifications/read', asyncHandler(async (req, res) => {
+  (await dbRun('UPDATE notifications SET is_read = 1 WHERE user_id = ?', [req.user!.id]));
   res.json({ ok: true });
-});
+}));
 
 export default router;
 

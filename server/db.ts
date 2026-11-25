@@ -1,18 +1,81 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import crypto from 'node:crypto';
-import { DatabaseSync } from 'node:sqlite';
+import pg from 'pg';
 
-const dbPath =
-  process.env.DB_PATH ||
-  (process.env.VERCEL
-    ? path.join('/tmp', 'o_learning.db')
-    : path.resolve(process.cwd(), 'data', 'o_learning.db'));
-fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+const { Pool, types } = pg;
 
-const db = new DatabaseSync(dbPath);
-db.exec('PRAGMA foreign_keys = ON;');
-db.exec('PRAGMA journal_mode = WAL;');
+// Parse PostgreSQL BIGINT (COUNT, SUM) and NUMERIC (ROUND, AVG) as JS numbers
+types.setTypeParser(20, (val) => parseInt(val, 10));
+types.setTypeParser(1700, (val) => parseFloat(val));
+// Parse TIMESTAMP / TIMESTAMPTZ as ISO strings for frontend compatibility
+types.setTypeParser(1114, (val) => new Date(val).toISOString());
+types.setTypeParser(1184, (val) => new Date(val).toISOString());
+
+const connectionString =
+  process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/o_learning';
+
+export const pool = new Pool({
+  connectionString,
+  ssl: process.env.PGSSL === 'true' ? { rejectUnauthorized: false } : undefined,
+  max: 20,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 10_000,
+});
+
+/** Convert `?` placeholders to PostgreSQL `$1, $2, ...` outside single-quoted string literals. */
+function convertPlaceholders(sql: string): string {
+  let out = '';
+  let idx = 1;
+  let inSingleQuote = false;
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+    if (ch === "'") {
+      if (inSingleQuote && sql[i + 1] === "'") {
+        out += "''";
+        i++;
+        continue;
+      }
+      inSingleQuote = !inSingleQuote;
+      out += ch;
+    } else if (ch === '?' && !inSingleQuote) {
+      out += `$${idx++}`;
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+}
+
+export async function dbGet<T = Record<string, any>>(
+  sql: string,
+  params: unknown[] = []
+): Promise<T | undefined> {
+  const res = await pool.query(convertPlaceholders(sql), params);
+  return res.rows[0] as T | undefined;
+}
+
+export async function dbAll<T = Record<string, any>>(
+  sql: string,
+  params: unknown[] = []
+): Promise<T[]> {
+  const res = await pool.query(convertPlaceholders(sql), params);
+  return res.rows as T[];
+}
+
+export async function dbRun(
+  sql: string,
+  params: unknown[] = []
+): Promise<{ changes: number; lastInsertRowid: number }> {
+  const res = await pool.query(convertPlaceholders(sql), params);
+  const firstRow = res.rows[0] as { id?: number | string } | undefined;
+  return {
+    changes: res.rowCount ?? 0,
+    lastInsertRowid: firstRow?.id !== undefined ? Number(firstRow.id) : 0,
+  };
+}
+
+export async function dbExec(sql: string): Promise<void> {
+  await pool.query(sql);
+}
 
 function hashSeedPassword(password: string): string {
   if (password === 'admin123') return '74b0cce31e1cffc4a4058c12c639c458:c65e4fe6a55db517764657f4d1d8b1e9d18767641cdcdc08e2e722abb11c779ee5e57a63313c5d2de9027d3c4a3398c4962c82db955a78874550fb881c43ed58';
@@ -23,21 +86,21 @@ function hashSeedPassword(password: string): string {
   return `${salt}:${derived}`;
 }
 
-export function initDatabase(): void {
-  db.exec(`
+export async function initDatabase(): Promise<void> {
+  await dbExec(`
     CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       full_name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
       mobile TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK (role IN ('student', 'faculty', 'admin')) DEFAULT 'student',
       avatar_url TEXT,
-      credits REAL NOT NULL DEFAULT 0,
+      credits DOUBLE PRECISION NOT NULL DEFAULT 0,
       referral_code TEXT NOT NULL UNIQUE,
       referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS faculty_profiles (
@@ -51,7 +114,7 @@ export function initDatabase(): void {
     );
 
     CREATE TABLE IF NOT EXISTS categories (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
       slug TEXT NOT NULL UNIQUE,
       description TEXT NOT NULL DEFAULT '',
@@ -61,7 +124,7 @@ export function initDatabase(): void {
     );
 
     CREATE TABLE IF NOT EXISTS courses (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       slug TEXT NOT NULL UNIQUE,
       category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
       title TEXT NOT NULL,
@@ -86,11 +149,11 @@ export function initDatabase(): void {
       faqs_json TEXT NOT NULL DEFAULT '[]',
       is_published INTEGER NOT NULL DEFAULT 1,
       display_order INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS modules (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
@@ -98,7 +161,7 @@ export function initDatabase(): void {
     );
 
     CREATE TABLE IF NOT EXISTS lessons (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       module_id INTEGER NOT NULL REFERENCES modules(id) ON DELETE CASCADE,
       course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
@@ -112,7 +175,7 @@ export function initDatabase(): void {
     );
 
     CREATE TABLE IF NOT EXISTS batches (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
       faculty_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -126,20 +189,20 @@ export function initDatabase(): void {
     );
 
     CREATE TABLE IF NOT EXISTS enrollments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
       batch_id INTEGER REFERENCES batches(id) ON DELETE SET NULL,
       status TEXT NOT NULL CHECK (status IN ('active', 'completed', 'upcoming')) DEFAULT 'active',
       progress_percent INTEGER NOT NULL DEFAULT 0,
       completed_lessons_json TEXT NOT NULL DEFAULT '[]',
-      enrolled_at TEXT NOT NULL DEFAULT (datetime('now')),
-      completed_at TEXT,
+      enrolled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      completed_at TIMESTAMPTZ,
       UNIQUE(student_id, course_id)
     );
 
     CREATE TABLE IF NOT EXISTS live_classes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
       course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
       faculty_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -153,7 +216,7 @@ export function initDatabase(): void {
     );
 
     CREATE TABLE IF NOT EXISTS tests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
       course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL,
       category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
@@ -161,18 +224,18 @@ export function initDatabase(): void {
       duration_minutes INTEGER NOT NULL DEFAULT 30,
       total_marks INTEGER NOT NULL DEFAULT 20,
       pass_marks INTEGER NOT NULL DEFAULT 8,
-      negative_marks REAL NOT NULL DEFAULT 0,
+      negative_marks DOUBLE PRECISION NOT NULL DEFAULT 0,
       difficulty TEXT NOT NULL CHECK (difficulty IN ('Easy', 'Medium', 'Hard')) DEFAULT 'Medium',
       price INTEGER NOT NULL DEFAULT 0,
       certificate_enabled INTEGER NOT NULL DEFAULT 1,
       expiry_date TEXT DEFAULT '',
       is_published INTEGER NOT NULL DEFAULT 1,
       created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS questions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       test_id INTEGER NOT NULL REFERENCES tests(id) ON DELETE CASCADE,
       question_text TEXT NOT NULL,
       options_json TEXT NOT NULL,
@@ -183,24 +246,24 @@ export function initDatabase(): void {
     );
 
     CREATE TABLE IF NOT EXISTS test_attempts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       test_id INTEGER NOT NULL REFERENCES tests(id) ON DELETE CASCADE,
       student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       answers_json TEXT NOT NULL,
-      score REAL NOT NULL,
+      score DOUBLE PRECISION NOT NULL,
       total_marks INTEGER NOT NULL,
       correct_count INTEGER NOT NULL,
       wrong_count INTEGER NOT NULL,
       unanswered_count INTEGER NOT NULL,
-      percentage REAL NOT NULL,
+      percentage DOUBLE PRECISION NOT NULL,
       rank INTEGER NOT NULL DEFAULT 1,
       time_taken_seconds INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'submitted',
-      submitted_at TEXT NOT NULL DEFAULT (datetime('now'))
+      submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS subscription_plans (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       slug TEXT NOT NULL UNIQUE,
       price INTEGER NOT NULL,
@@ -212,7 +275,7 @@ export function initDatabase(): void {
     );
 
     CREATE TABLE IF NOT EXISTS payments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       order_ref TEXT NOT NULL UNIQUE,
       student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       item_type TEXT NOT NULL CHECK (item_type IN ('course', 'subscription')),
@@ -224,53 +287,53 @@ export function initDatabase(): void {
       method TEXT NOT NULL CHECK (method IN ('UPI', 'Card', 'NetBanking', 'Wallet', 'Free')),
       status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'successful', 'failed', 'cancelled', 'refunded')) DEFAULT 'pending',
       gateway_txn_id TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS user_subscriptions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       plan_id INTEGER NOT NULL REFERENCES subscription_plans(id) ON DELETE CASCADE,
       status TEXT NOT NULL CHECK (status IN ('active', 'expired', 'cancelled')) DEFAULT 'active',
-      starts_at TEXT NOT NULL DEFAULT (datetime('now')),
-      expires_at TEXT NOT NULL,
+      starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL,
       payment_id INTEGER REFERENCES payments(id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS referrals (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       referrer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       referred_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       referral_code TEXT NOT NULL,
       status TEXT NOT NULL CHECK (status IN ('pending', 'successful')) DEFAULT 'successful',
       reward_amount INTEGER NOT NULL DEFAULT 250,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS certificates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       certificate_code TEXT NOT NULL UNIQUE,
       student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
       student_name TEXT NOT NULL,
       course_title TEXT NOT NULL,
-      issued_at TEXT NOT NULL DEFAULT (datetime('now')),
+      issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       status TEXT NOT NULL CHECK (status IN ('valid', 'revoked')) DEFAULT 'valid',
       UNIQUE(student_id, course_id)
     );
 
     CREATE TABLE IF NOT EXISTS reviews (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
       student_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       student_name TEXT NOT NULL,
       rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
       comment TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS contact_enquiries (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       email TEXT NOT NULL,
       mobile TEXT NOT NULL,
@@ -278,38 +341,38 @@ export function initDatabase(): void {
       message TEXT NOT NULL,
       status TEXT NOT NULL CHECK (status IN ('new', 'in_progress', 'resolved')) DEFAULT 'new',
       admin_notes TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS cms_settings (
       key TEXT PRIMARY KEY,
       value_json TEXT NOT NULL,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS notifications (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
       message TEXT NOT NULL,
       type TEXT NOT NULL DEFAULT 'info',
       is_read INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS course_referral_links (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
       referrer_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       referral_code TEXT NOT NULL UNIQUE,
       clicks INTEGER NOT NULL DEFAULT 0,
       enrollments_count INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL CHECK (status IN ('active', 'paused')) DEFAULT 'active',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS referral_events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
       referral_code TEXT NOT NULL,
       event_type TEXT NOT NULL CHECK (
@@ -325,35 +388,35 @@ export function initDatabase(): void {
         )
       ),
       actor_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS course_referral_attributions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
       referral_code TEXT NOT NULL,
       referrer_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       referred_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       payment_id INTEGER REFERENCES payments(id) ON DELETE SET NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE(course_id, referred_user_id)
     );
 
     CREATE TABLE IF NOT EXISTS redemptions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       referral_id INTEGER REFERENCES course_referral_links(id) ON DELETE SET NULL,
-      amount REAL NOT NULL,
+      amount DOUBLE PRECISION NOT NULL,
       method TEXT NOT NULL DEFAULT 'UPI',
       account_reference TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL CHECK (status IN ('Pending', 'Processing', 'Approved', 'Processed', 'Paid', 'Rejected', 'Failed')) DEFAULT 'Pending',
       notes TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS course_notes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
@@ -361,12 +424,12 @@ export function initDatabase(): void {
       file_size_text TEXT NOT NULL DEFAULT '2.4 MB',
       file_size_bytes INTEGER NOT NULL DEFAULT 2516582,
       is_published INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS pdfs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       category TEXT NOT NULL DEFAULT 'Worksheets & Notes',
@@ -375,12 +438,12 @@ export function initDatabase(): void {
       file_size_text TEXT NOT NULL DEFAULT '118 KB',
       display_order INTEGER NOT NULL DEFAULT 1,
       is_published INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS videos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       video_url TEXT NOT NULL,
@@ -390,37 +453,47 @@ export function initDatabase(): void {
       duration_text TEXT NOT NULL DEFAULT '02:15',
       display_order INTEGER NOT NULL DEFAULT 1,
       is_published INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS email_otps (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      otp_hash TEXT NOT NULL,
+      purpose TEXT NOT NULL CHECK (purpose IN ('signup', 'forgot_password')),
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      expires_at TIMESTAMPTZ NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(email, purpose)
     );
   `);
 
-  // Ensure new columns exist if DB was created before this migration
-  const safeAddCol = (table: string, colDef: string) => {
-    try {
-      db.exec(`ALTER TABLE ${table} ADD COLUMN ${colDef};`);
-    } catch {
-      // column already exists
-    }
+  const safeAddCol = async (table: string, colDef: string) => {
+    await dbExec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${colDef};`);
   };
-  safeAddCol('users', 'credits REAL NOT NULL DEFAULT 0');
-  safeAddCol('categories', "image TEXT NOT NULL DEFAULT ''");
-  safeAddCol('courses', "banner_image TEXT NOT NULL DEFAULT ''");
-  safeAddCol('courses', "preview_image TEXT NOT NULL DEFAULT ''");
-  safeAddCol('courses', "instructor_image TEXT NOT NULL DEFAULT ''");
-  safeAddCol('courses', "language TEXT NOT NULL DEFAULT 'English / Hindi'");
-  safeAddCol('courses', "prerequisites TEXT NOT NULL DEFAULT 'None'");
-  safeAddCol('courses', 'featured INTEGER NOT NULL DEFAULT 0');
-  safeAddCol('tests', 'price INTEGER NOT NULL DEFAULT 0');
-  safeAddCol('tests', 'certificate_enabled INTEGER NOT NULL DEFAULT 1');
-  safeAddCol('tests', "expiry_date TEXT DEFAULT ''");
+  await safeAddCol('users', 'credits DOUBLE PRECISION NOT NULL DEFAULT 0');
+  await safeAddCol('users', "auth_provider TEXT NOT NULL DEFAULT 'local'");
+  await safeAddCol('users', 'google_id TEXT');
+  await safeAddCol('users', 'email_verified INTEGER NOT NULL DEFAULT 0');
+  await safeAddCol('users', 'profile_completed INTEGER NOT NULL DEFAULT 1');
+  await safeAddCol('categories', "image TEXT NOT NULL DEFAULT ''");
+  await safeAddCol('courses', "banner_image TEXT NOT NULL DEFAULT ''");
+  await safeAddCol('courses', "preview_image TEXT NOT NULL DEFAULT ''");
+  await safeAddCol('courses', "instructor_image TEXT NOT NULL DEFAULT ''");
+  await safeAddCol('courses', "language TEXT NOT NULL DEFAULT 'English / Hindi'");
+  await safeAddCol('courses', "prerequisites TEXT NOT NULL DEFAULT 'None'");
+  await safeAddCol('courses', 'featured INTEGER NOT NULL DEFAULT 0');
+  await safeAddCol('tests', 'price INTEGER NOT NULL DEFAULT 0');
+  await safeAddCol('tests', 'certificate_enabled INTEGER NOT NULL DEFAULT 1');
+  await safeAddCol('tests', "expiry_date TEXT DEFAULT ''");
 
-  const userCount = (db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c;
-  if (userCount === 0) {
-    seedDatabase();
+  const userCountRow = await dbGet<{ c: number }>('SELECT COUNT(*) as c FROM users');
+  if ((userCountRow?.c ?? 0) === 0) {
+    await seedDatabase();
   } else {
-    // Upgrade legacy .svg thumbnails to new .png artwork if unchanged
-    db.exec(`
+    await dbExec(`
       UPDATE courses SET thumbnail_url = REPLACE(thumbnail_url, '.svg', '.png') WHERE thumbnail_url LIKE '/images/courses/%.svg';
       UPDATE cms_settings SET value_json = REPLACE(value_json, '/images/about-campus.svg', '/images/about-hero-banner.png') WHERE key = 'about';
       UPDATE cms_settings SET value_json = REPLACE(value_json, 'Hyderabad, Telangana, India', 'India');
@@ -432,29 +505,33 @@ export function initDatabase(): void {
   }
 
   try {
-    const notesCount = (db.prepare('SELECT COUNT(*) as c FROM course_notes').get() as { c: number }).c;
-    if (notesCount === 0) {
-      const allCourses = db.prepare('SELECT id, title FROM courses').all() as Array<{ id: number; title: string }>;
-      const insNote = db.prepare(`
-        INSERT INTO course_notes (course_id, title, description, file_url, file_size_text, file_size_bytes, is_published)
-        VALUES (?, ?, ?, ?, ?, ?, 1)
-      `);
+    const notesCountRow = await dbGet<{ c: number }>('SELECT COUNT(*) as c FROM course_notes');
+    if ((notesCountRow?.c ?? 0) === 0) {
+      const allCourses = await dbAll<{ id: number; title: string }>('SELECT id, title FROM courses');
       for (const c of allCourses) {
-        insNote.run(
-          c.id,
-          `${c.title} — Official Comprehensive Handbook & Formula Sheet`,
-          `Complete module-by-module reference handbook, formula summaries, cheat sheets, and practice question sets for ${c.title}.`,
-          `/api/public/materials/${c.id}/1`,
-          '3.2 MB',
-          3355443
+        await dbRun(
+          `INSERT INTO course_notes (course_id, title, description, file_url, file_size_text, file_size_bytes, is_published)
+           VALUES (?, ?, ?, ?, ?, ?, 1)`,
+          [
+            c.id,
+            `${c.title} — Official Comprehensive Handbook & Formula Sheet`,
+            `Complete module-by-module reference handbook, formula summaries, cheat sheets, and practice question sets for ${c.title}.`,
+            `/api/public/materials/${c.id}/1`,
+            '3.2 MB',
+            3355443,
+          ]
         );
-        insNote.run(
-          c.id,
-          `${c.title} — High-Yield Revision Capsule & Solved Question Bank`,
-          `Core summary notes, high-yield exam takeaways, and solved exercises curated for rapid revision.`,
-          `/api/public/materials/${c.id}/2`,
-          '1.8 MB',
-          1887436
+        await dbRun(
+          `INSERT INTO course_notes (course_id, title, description, file_url, file_size_text, file_size_bytes, is_published)
+           VALUES (?, ?, ?, ?, ?, ?, 1)`,
+          [
+            c.id,
+            `${c.title} — High-Yield Revision Capsule & Solved Question Bank`,
+            `Core summary notes, high-yield exam takeaways, and solved exercises curated for rapid revision.`,
+            `/api/public/materials/${c.id}/2`,
+            '1.8 MB',
+            1887436,
+          ]
         );
       }
     }
@@ -463,52 +540,52 @@ export function initDatabase(): void {
   }
 
   try {
-    const pdfCount = (db.prepare('SELECT COUNT(*) as c FROM pdfs').get() as { c: number }).c;
-    if (pdfCount === 0) {
-      const insPdf = db.prepare(`
+    const pdfCountRow = await dbGet<{ c: number }>('SELECT COUNT(*) as c FROM pdfs');
+    if ((pdfCountRow?.c ?? 0) === 0) {
+      const insPdfSql = `
         INSERT INTO pdfs (title, description, category, file_url, thumbnail_url, file_size_text, display_order, is_published)
         VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-      `);
-      insPdf.run(
+      `;
+      await dbRun(insPdfSql, [
         'Future Forms - Will and Going To (Practice Worksheet)',
         'Comprehensive grammar practice worksheet covering Future Forms, Will vs Going To rules, sentence structures, and test exercises with answer keys.',
         'Spoken English & Grammar',
         'https://o-learning-platform-media-2026.s3.ap-southeast-2.amazonaws.com/uploads/1795100996750-Future-Forms-Practice-Worksheet.pdf',
         '/images/courses/spoken-english.png',
         '118 KB',
-        1
-      );
-      insPdf.run(
+        1,
+      ]);
+      await dbRun(insPdfSql, [
         'Quantitative Aptitude & Speed Math Formula Handbook',
         'Handy formula cheat sheet with Vedic math tricks, percentage-fraction tables, and shortcuts for competitive exam aspirants.',
         'Competitive Exams',
         '/api/public/materials/2/1',
         '/images/courses/competitive-exams.png',
         '2.4 MB',
-        2
-      );
-      insPdf.run(
+        2,
+      ]);
+      await dbRun(insPdfSql, [
         'Python & Full-Stack Web Architecture Cheat Sheet',
         'Essential Python syntax, OOP concepts, SQL queries, and REST API conventions formatted for quick interview and lab reference.',
         'IT & Software',
         '/api/public/materials/7/1',
         '/images/courses/it-programming.png',
         '3.1 MB',
-        3
-      );
+        3,
+      ]);
     }
   } catch {
     // ignore
   }
 
   try {
-    const videoCount = (db.prepare('SELECT COUNT(*) as c FROM videos').get() as { c: number }).c;
-    if (videoCount === 0) {
-      const insVideo = db.prepare(`
+    const videoCountRow = await dbGet<{ c: number }>('SELECT COUNT(*) as c FROM videos');
+    if ((videoCountRow?.c ?? 0) === 0) {
+      const insVideoSql = `
         INSERT INTO videos (title, description, video_url, thumbnail_url, category, placement, duration_text, display_order, is_published)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-      `);
-      insVideo.run(
+      `;
+      await dbRun(insVideoSql, [
         'Welcome to O-Learning Platform — Learning Partner for a Better Future',
         'Experience how O-Learning Platform empowers Indian learners with expert-led live classes, structured HD lecture recordings, downloadable study notes, and outcome-oriented mentorship.',
         '/videos/platform-intro.mp4',
@@ -516,9 +593,9 @@ export function initDatabase(): void {
         'Platform Tour & Classroom Experience',
         'homepage_featured',
         '00:45',
-        1
-      );
-      insVideo.run(
+        1,
+      ]);
+      await dbRun(insVideoSql, [
         'Live Class Demo: Spoken English & Pronunciation Mastery',
         'Sample interactive class walkthrough covering everyday conversation clubs, fluency drills, and accent neutralization.',
         '/videos/platform-intro.mp4',
@@ -526,27 +603,26 @@ export function initDatabase(): void {
         'Classroom Demo',
         'homepage_section',
         '00:45',
-        2
-      );
+        2,
+      ]);
     }
   } catch {
     // ignore
   }
 
-  // Idempotent cleanup: removes seeded demo transactions/students/referrals so Revenue/Payments/Enrollments start at 0
-  // while keeping all 8 courses, categories, faculty, batches, live classes, and mock tests available on the website.
-  const cleaned = db
-    .prepare("SELECT key FROM cms_settings WHERE key = '_migration_v3_clean_txns'")
-    .get();
+  const cleaned = await dbGet("SELECT key FROM cms_settings WHERE key = '_migration_v3_clean_txns'");
   if (!cleaned) {
-    runSafeDemoCleanup();
-    db.prepare(
-      "INSERT OR REPLACE INTO cms_settings (key, value_json) VALUES ('_migration_v3_clean_txns', ?)"
-    ).run(JSON.stringify({ cleanedAt: new Date().toISOString() }));
+    await runSafeDemoCleanup();
+    await dbRun(
+      `INSERT INTO cms_settings (key, value_json, updated_at)
+       VALUES ('_migration_v3_clean_txns', ?, NOW())
+       ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json, updated_at = NOW()`,
+      [JSON.stringify({ cleanedAt: new Date().toISOString() })]
+    );
   }
 }
 
-export function runSafeDemoCleanup(): { removed: Record<string, number> } {
+export async function runSafeDemoCleanup(): Promise<{ removed: Record<string, number> }> {
   const removed: Record<string, number> = {
     payments: 0,
     referrals: 0,
@@ -554,42 +630,40 @@ export function runSafeDemoCleanup(): { removed: Record<string, number> } {
     enquiries: 0,
   };
 
-  removed.payments += Number(
-    db.prepare("DELETE FROM payments WHERE order_ref IN ('ORD-2026-1001', 'ORD-2026-1002')").run().changes
-  );
-  removed.referrals += Number(
-    db
-      .prepare("DELETE FROM course_referral_links WHERE referral_code IN ('OL-1023SPK', 'OL-8841INT', 'OL-5521ITP')")
-      .run().changes
-  );
-  removed.referrals += Number(
-    db.prepare("DELETE FROM referrals WHERE referral_code = 'OLR-AARAV26'").run().changes
-  );
-
-  const demoStudents = db
-    .prepare(
-      "SELECT id FROM users WHERE email IN ('aarav@student.in', 'sneha@student.in') AND id NOT IN (SELECT DISTINCT student_id FROM payments)"
+  removed.payments += (
+    await dbRun("DELETE FROM payments WHERE order_ref IN ('ORD-2026-1001', 'ORD-2026-1002')")
+  ).changes;
+  removed.referrals += (
+    await dbRun(
+      "DELETE FROM course_referral_links WHERE referral_code IN ('OL-1023SPK', 'OL-8841INT', 'OL-5521ITP')"
     )
-    .all() as Array<{ id: number }>;
+  ).changes;
+  removed.referrals += (
+    await dbRun("DELETE FROM referrals WHERE referral_code = 'OLR-AARAV26'")
+  ).changes;
+
+  const demoStudents = await dbAll<{ id: number }>(
+    "SELECT id FROM users WHERE email IN ('aarav@student.in', 'sneha@student.in') AND id NOT IN (SELECT DISTINCT student_id FROM payments)"
+  );
   for (const st of demoStudents) {
-    removed.users += Number(db.prepare('DELETE FROM users WHERE id = ?').run(st.id).changes);
+    removed.users += (await dbRun('DELETE FROM users WHERE id = ?', [st.id])).changes;
   }
 
-  removed.enquiries += Number(
-    db.prepare("DELETE FROM contact_enquiries WHERE email = 'priya.nair@example.com'").run().changes
-  );
+  removed.enquiries += (
+    await dbRun("DELETE FROM contact_enquiries WHERE email = 'priya.nair@example.com'")
+  ).changes;
 
   return { removed };
 }
 
-function seedDatabase(): void {
-  const insertUser = db.prepare(`
+async function seedDatabase(): Promise<void> {
+  const insertUserSql = `
     INSERT INTO users (full_name, email, mobile, password_hash, role, avatar_url, referral_code, is_active)
     VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-  `);
+  RETURNING id`;
 
   // Seed Admin, 4 Faculty, and 2 Sample Students
-  const adminRes = insertUser.run(
+  const adminRes = (await dbRun(insertUserSql, [
     'O-Learning Admin',
     'admin@olearning.in',
     '9000000001',
@@ -597,11 +671,11 @@ function seedDatabase(): void {
     'admin',
     null,
     'OLEARNADMIN'
-  );
+  ]));
   const adminId = Number(adminRes.lastInsertRowid);
 
   const f1 = Number(
-    insertUser.run(
+    (await dbRun(insertUserSql, [
       'Dr. Ananya Sharma',
       'ananya@olearning.in',
       '9000000011',
@@ -609,10 +683,10 @@ function seedDatabase(): void {
       'faculty',
       null,
       'FACANANYA'
-    ).lastInsertRowid
+    ])).lastInsertRowid
   );
   const f2 = Number(
-    insertUser.run(
+    (await dbRun(insertUserSql, [
       'Prof. Vikram Reddy',
       'vikram@olearning.in',
       '9000000012',
@@ -620,10 +694,10 @@ function seedDatabase(): void {
       'faculty',
       null,
       'FACVIKRAM'
-    ).lastInsertRowid
+    ])).lastInsertRowid
   );
   const f3 = Number(
-    insertUser.run(
+    (await dbRun(insertUserSql, [
       'Rahul Deshmukh',
       'rahul@olearning.in',
       '9000000013',
@@ -631,10 +705,10 @@ function seedDatabase(): void {
       'faculty',
       null,
       'FACRAHUL'
-    ).lastInsertRowid
+    ])).lastInsertRowid
   );
   const f4 = Number(
-    insertUser.run(
+    (await dbRun(insertUserSql, [
       'Meera Krishnan (IAS Retd. Mentor)',
       'meera@olearning.in',
       '9000000014',
@@ -642,66 +716,66 @@ function seedDatabase(): void {
       'faculty',
       null,
       'FACMEERA'
-    ).lastInsertRowid
+    ])).lastInsertRowid
   );
 
-  const insertFacultyProfile = db.prepare(`
+  const insertFacultyProfileSql = `
     INSERT INTO faculty_profiles (user_id, title, bio, specialization, experience_years, qualifications)
     VALUES (?, ?, ?, ?, ?, ?)
-  `);
-  insertFacultyProfile.run(
+  `;
+  (await dbRun(insertFacultyProfileSql, [
     f1,
     'Head of Communication & Spoken English',
     'Cambridge CELTA-certified communication coach who has mentored 12,000+ Indian learners in spoken English, pronunciation, and corporate readiness.',
     'Spoken English, Interview & Career Skills',
     11,
     'Ph.D. English Literature, CELTA'
-  );
-  insertFacultyProfile.run(
+  ]));
+  (await dbRun(insertFacultyProfileSql, [
     f2,
     'Senior JEE/NEET & Quantitative Mentor',
     'Former IIT/NEET senior lecturer simplifying Physics, Mathematics, and Quantitative Aptitude with visual problem-solving methods.',
     'JEE, NEET & Quantitative Aptitude',
     14,
     'M.Tech IIT Madras'
-  );
-  insertFacultyProfile.run(
+  ]));
+  (await dbRun(insertFacultyProfileSql, [
     f3,
     'Principal Software Engineering Instructor',
     '10+ years building scalable cloud and Java/Python systems in leading Indian tech parks; passionate about turning beginners into job-ready engineers.',
     'Python, Java, DSA & IT Interviews',
     10,
     'B.Tech CSE, Ex-Senior SDE'
-  );
-  insertFacultyProfile.run(
+  ]));
+  (await dbRun(insertFacultyProfileSql, [
     f4,
     'UPSC & Competitive Exams Director',
     'Renowned GS & Current Affairs mentor guiding aspirants across India for UPSC CSE, SSC CGL, Banking, and State PSC.',
     'UPSC CSE, Polity, Economy & Govt Exams',
     15,
     'M.A. Public Administration'
-  );
+  ]));
 
   // Zero demo students, zero demo payments (₹0 revenue), zero demo referrals on fresh DB
 
   // Categories
-  const insertCat = db.prepare(
-    'INSERT INTO categories (name, slug, description, icon_name) VALUES (?, ?, ?, ?)'
-  );
+  const insertCatSql = 
+    'INSERT INTO categories (name, slug, description, icon_name) VALUES (?, ?, ?, ?)RETURNING id'
+  ;
   const catLang = Number(
-    insertCat.run('Languages & Communication', 'languages', 'Fluency, grammar, and soft skills', 'MessageCircle').lastInsertRowid
+    (await dbRun(insertCatSql, ['Languages & Communication', 'languages', 'Fluency, grammar, and soft skills', 'MessageCircle'])).lastInsertRowid
   );
   const catExam = Number(
-    insertCat.run('Competitive & Govt Exams', 'competitive-exams', 'UPSC, SSC, Banking, and State PSC', 'Trophy').lastInsertRowid
+    (await dbRun(insertCatSql, ['Competitive & Govt Exams', 'competitive-exams', 'UPSC, SSC, Banking, and State PSC', 'Trophy'])).lastInsertRowid
   );
   const catSci = Number(
-    insertCat.run('Engineering & Medical Entrance', 'jee-neet', 'JEE Main/Advanced & NEET UG preparation', 'GraduationCap').lastInsertRowid
+    (await dbRun(insertCatSql, ['Engineering & Medical Entrance', 'jee-neet', 'JEE Main/Advanced & NEET UG preparation', 'GraduationCap'])).lastInsertRowid
   );
   const catApt = Number(
-    insertCat.run('Aptitude & Career Prep', 'aptitude-career', 'Placement aptitude, HR & mock interviews', 'Brain').lastInsertRowid
+    (await dbRun(insertCatSql, ['Aptitude & Career Prep', 'aptitude-career', 'Placement aptitude, HR & mock interviews', 'Brain'])).lastInsertRowid
   );
   const catIT = Number(
-    insertCat.run('IT & Programming', 'it-programming', 'Python, Java, Full-Stack & Cloud skills', 'Code2').lastInsertRowid
+    (await dbRun(insertCatSql, ['IT & Programming', 'it-programming', 'Python, Java, Full-Stack & Cloud skills', 'Code2'])).lastInsertRowid
   );
 
   // 8 Primary Courses from the Prompt
@@ -1060,20 +1134,20 @@ function seedDatabase(): void {
     },
   ];
 
-  const insertCourse = db.prepare(`
+  const insertCourseSql = `
     INSERT INTO courses (
       slug, category_id, title, short_description, description, thumbnail_url,
       icon_name, icon_color, level, duration, price, discount_price, is_free,
       faculty_id, what_you_learn_json, faqs_json, is_published, display_order
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-  `);
-  const insertModule = db.prepare(
-    'INSERT INTO modules (course_id, title, description, sort_order) VALUES (?, ?, ?, ?)'
-  );
-  const insertLesson = db.prepare(`
+  RETURNING id`;
+  const insertModuleSql = 
+    'INSERT INTO modules (course_id, title, description, sort_order) VALUES (?, ?, ?, ?)RETURNING id'
+  ;
+  const insertLessonSql = `
     INSERT INTO lessons (module_id, course_id, title, lesson_type, video_url, material_url, duration_minutes, content_text, is_preview, sort_order)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+  `;
 
   const courseIds: Record<string, number> = {};
   const sampleVideoUrls = [
@@ -1081,9 +1155,9 @@ function seedDatabase(): void {
     'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
   ];
 
-  coursesData.forEach((c, idx) => {
+  for (const [idx, c] of coursesData.entries()) {
     const cid = Number(
-      insertCourse.run(
+      (await dbRun(insertCourseSql, [
         c.slug,
         c.category_id,
         c.title,
@@ -1101,14 +1175,14 @@ function seedDatabase(): void {
         JSON.stringify(c.what_you_learn),
         JSON.stringify(c.faqs),
         idx + 1
-      ).lastInsertRowid
+      ])).lastInsertRowid
     );
     courseIds[c.slug] = cid;
 
-    c.modules.forEach((m, mIdx) => {
-      const mid = Number(insertModule.run(cid, m.title, '', mIdx + 1).lastInsertRowid);
-      m.lessons.forEach((l, lIdx) => {
-        insertLesson.run(
+    for (const [mIdx, m] of c.modules.entries()) {
+      const mid = Number((await dbRun(insertModuleSql, [cid, m.title, '', mIdx + 1])).lastInsertRowid);
+      for (const [lIdx, l] of m.lessons.entries()) {
+        (await dbRun(insertLessonSql, [
           mid,
           cid,
           l.title,
@@ -1119,19 +1193,19 @@ function seedDatabase(): void {
           l.text,
           l.preview,
           lIdx + 1
-        );
-      });
-    });
-  });
+        ]));
+      }
+    }
+  }
 
   // Enroll sample student Aarav in Spoken English & IT Programming
   // Batches
-  const insertBatch = db.prepare(`
+  const insertBatchSql = `
     INSERT INTO batches (name, course_id, faculty_id, start_date, end_date, timings, total_seats, enrolled_seats, status)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+  `;
   const b1 = Number(
-    insertBatch.run(
+    (await dbRun(insertBatchSql, [
       'Fluency Ignite Batch — Nov 2026',
       courseIds['spoken-english'],
       f1,
@@ -1141,9 +1215,9 @@ function seedDatabase(): void {
       60,
       44,
       'active'
-    ).lastInsertRowid
+    ])).lastInsertRowid
   );
-  insertBatch.run(
+  (await dbRun(insertBatchSql, [
     'Python & Java Placement Fast-Track',
     courseIds['it-and-programming-courses'],
     f3,
@@ -1153,8 +1227,8 @@ function seedDatabase(): void {
     80,
     59,
     'active'
-  );
-  insertBatch.run(
+  ]));
+  (await dbRun(insertBatchSql, [
     'JEE & NEET Sankalp 2027 Batch',
     courseIds['jee-neet-preparation'],
     f2,
@@ -1164,8 +1238,8 @@ function seedDatabase(): void {
     120,
     72,
     'upcoming'
-  );
-  insertBatch.run(
+  ]));
+  (await dbRun(insertBatchSql, [
     'UPSC GS Foundation Prelims+Mains',
     courseIds['upsc-preparation'],
     f4,
@@ -1175,8 +1249,8 @@ function seedDatabase(): void {
     100,
     63,
     'upcoming'
-  );
-  insertBatch.run(
+  ]));
+  (await dbRun(insertBatchSql, [
     'Aptitude Crash Batch — Oct 2026',
     courseIds['aptitude-and-reasoning'],
     f2,
@@ -1186,7 +1260,7 @@ function seedDatabase(): void {
     60,
     60,
     'completed'
-  );
+  ]));
 
   // Live Classes (Today's Live, Upcoming, Completed)
   const now = new Date();
@@ -1195,11 +1269,11 @@ function seedDatabase(): void {
   const dayAfter = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
 
-  const insertLive = db.prepare(`
+  const insertLiveSql = `
     INSERT INTO live_classes (title, course_id, faculty_id, batch_id, scheduled_at, duration_minutes, meeting_url, status, recording_url, description)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  insertLive.run(
+  `;
+  (await dbRun(insertLiveSql, [
     'Confidence in Spoken English: Live Fluency Lab',
     courseIds['spoken-english'],
     f1,
@@ -1210,8 +1284,8 @@ function seedDatabase(): void {
     'live',
     '',
     'Interactive live speaking & pronunciation workshop with real-time mentor feedback.'
-  );
-  insertLive.run(
+  ]));
+  (await dbRun(insertLiveSql, [
     'Java OOP & Coding Interview Patterns',
     courseIds['it-and-programming-courses'],
     f3,
@@ -1222,8 +1296,8 @@ function seedDatabase(): void {
     'upcoming',
     '',
     'Hands-on coding walkthrough covering Polymorphism, Interfaces, and Collections.'
-  );
-  insertLive.run(
+  ]));
+  (await dbRun(insertLiveSql, [
     'Newton’s Laws & Friction Problem Marathon',
     courseIds['jee-neet-preparation'],
     f2,
@@ -1234,8 +1308,8 @@ function seedDatabase(): void {
     'upcoming',
     '',
     'High-yield JEE & NEET Mechanics numericals solved live.'
-  );
-  insertLive.run(
+  ]));
+  (await dbRun(insertLiveSql, [
     'UPSC Editorial Analysis & Mains Answer Structuring',
     courseIds['upsc-preparation'],
     f4,
@@ -1246,8 +1320,8 @@ function seedDatabase(): void {
     'upcoming',
     '',
     'Decode today’s key national policies and frame high-scoring GS Mains answers.'
-  );
-  insertLive.run(
+  ]));
+  (await dbRun(insertLiveSql, [
     'Everyday Grammar Traps & Fluency Hacks',
     courseIds['spoken-english'],
     f1,
@@ -1258,20 +1332,20 @@ function seedDatabase(): void {
     'completed',
     sampleVideoUrls[0],
     'Recorded session covering articles, prepositions, and conditional clauses.'
-  );
+  ]));
 
   // Tests & Questions
-  const insertTest = db.prepare(`
+  const insertTestSql = `
     INSERT INTO tests (title, course_id, category_id, description, duration_minutes, total_marks, pass_marks, negative_marks, difficulty, is_published, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-  `);
-  const insertQ = db.prepare(`
+  RETURNING id`;
+  const insertQSql = `
     INSERT INTO questions (test_id, question_text, options_json, correct_index, marks, explanation, sort_order)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
+  `;
 
   const t1 = Number(
-    insertTest.run(
+    (await dbRun(insertTestSql, [
       'Spoken English Grammar & Fluency Mock Test',
       courseIds['spoken-english'],
       catLang,
@@ -1282,20 +1356,20 @@ function seedDatabase(): void {
       0,
       'Easy',
       f1
-    ).lastInsertRowid
+    ])).lastInsertRowid
   );
-  [
+  for (const [i, [q, opts, ans, exp]] of ([
     ['Choose the grammatically correct sentence:', ['She don’t know the answer.', 'She doesn’t knows the answer.', 'She doesn’t know the answer.', 'She not know the answer.'], 2, 'With singular third-person "she", use "does not + base verb (know)".'],
     ['Select the best synonym for "Articulate":', ['Hesitant', 'Eloquent', 'Silent', 'Ambiguous'], 1, '"Eloquent" means fluent and persuasive in speaking or writing.'],
     ['Fill in the blank: Neither the students nor the teacher ___ present today.', ['were', 'are', 'was', 'have'], 2, 'With "neither...nor", the verb agrees with the nearest subject ("the teacher", singular).'],
     ['Identify the correct preposition: I look forward ___ meeting you tomorrow.', ['for', 'to', 'at', 'with'], 1, '"Look forward to" is always followed by a noun or gerund (-ing form).'],
     ['Which phrase is most polite in a business email?', ['Send me the file fast.', 'Could you please share the updated file?', 'I want the file right now.', 'Why haven’t you sent the file?'], 1, 'Using "Could you please..." maintains a courteous professional tone.'],
-  ].forEach(([q, opts, ans, exp], i) => {
-    insertQ.run(t1, q as string, JSON.stringify(opts), ans as number, 2, exp as string, i + 1);
-  });
+  ]).entries()) {
+    (await dbRun(insertQSql, [t1, q as string, JSON.stringify(opts), ans as number, 2, exp as string, i + 1]));
+  }
 
   const t2 = Number(
-    insertTest.run(
+    (await dbRun(insertTestSql, [
       'Quantitative Aptitude & Logical Reasoning Sprint',
       courseIds['aptitude-and-reasoning'],
       catApt,
@@ -1306,20 +1380,20 @@ function seedDatabase(): void {
       0.5,
       'Medium',
       f2
-    ).lastInsertRowid
+    ])).lastInsertRowid
   );
-  [
+  for (const [i, [q, opts, ans, exp]] of ([
     ['A train 150m long passes a pole in 15 seconds. What is its speed in km/h?', ['30 km/h', '36 km/h', '40 km/h', '45 km/h'], 1, 'Speed = 150/15 = 10 m/s = 10 × 18/5 = 36 km/h.'],
     ['If A can finish a work in 12 days and B in 18 days, how many days will they take together?', ['6.2 days', '7.2 days', '8 days', '9 days'], 1, 'Combined rate = 1/12 + 1/18 = 5/36 -> 36/5 = 7.2 days.'],
     ['Find the next number in the series: 3, 7, 15, 31, 63, ?', ['125', '127', '129', '131'], 1, 'Each term follows (prev × 2) + 1: 63 × 2 + 1 = 127.'],
     ['If COURSE is coded as DPVSTF, how is LEARN coded?', ['MFBSO', 'MFCSO', 'MFBRO', 'NFBSO'], 0, 'Each letter shifts +1 in the alphabet: L->M, E->F, A->B, R->S, N->O.'],
     ['A shopkeeper sells an item at ₹540 making a 20% profit. What was the cost price?', ['₹432', '₹450', '₹460', '₹480'], 1, 'CP = 540 / 1.20 = ₹450.'],
-  ].forEach(([q, opts, ans, exp], i) => {
-    insertQ.run(t2, q as string, JSON.stringify(opts), ans as number, 2, exp as string, i + 1);
-  });
+  ]).entries()) {
+    (await dbRun(insertQSql, [t2, q as string, JSON.stringify(opts), ans as number, 2, exp as string, i + 1]));
+  }
 
   const t3 = Number(
-    insertTest.run(
+    (await dbRun(insertTestSql, [
       'Python & Java Core Programming Assessment',
       courseIds['it-and-programming-courses'],
       catIT,
@@ -1330,20 +1404,20 @@ function seedDatabase(): void {
       0,
       'Medium',
       f3
-    ).lastInsertRowid
+    ])).lastInsertRowid
   );
-  [
+  for (const [i, [q, opts, ans, exp]] of ([
     ['What is the average time complexity of searching a key in a hash table?', ['O(n)', 'O(log n)', 'O(1)', 'O(n log n)'], 2, 'Hash tables provide O(1) average-case lookup.'],
     ['Which Python data type is immutable?', ['list', 'dict', 'set', 'tuple'], 3, 'Tuples cannot be modified after creation.'],
     ['In Java, which keyword prevents a method from being overridden?', ['static', 'final', 'private', 'abstract'], 1, 'Marking a method as final prevents subclasses from overriding it.'],
     ['What is the output of `len("O-Learning")` in Python?', ['9', '10', '11', '8'], 1, 'Count of characters in "O-Learning" including the hyphen is 10.'],
     ['Which SQL clause is used to filter grouped records?', ['WHERE', 'GROUP BY', 'HAVING', 'ORDER BY'], 2, 'HAVING filters aggregated groups after GROUP BY.'],
-  ].forEach(([q, opts, ans, exp], i) => {
-    insertQ.run(t3, q as string, JSON.stringify(opts), ans as number, 2, exp as string, i + 1);
-  });
+  ]).entries()) {
+    (await dbRun(insertQSql, [t3, q as string, JSON.stringify(opts), ans as number, 2, exp as string, i + 1]));
+  }
 
   const t4 = Number(
-    insertTest.run(
+    (await dbRun(insertTestSql, [
       'JEE / NEET & UPSC Concept Challenge',
       courseIds['jee-neet-preparation'],
       catSci,
@@ -1354,24 +1428,24 @@ function seedDatabase(): void {
       0.5,
       'Hard',
       f2
-    ).lastInsertRowid
+    ])).lastInsertRowid
   );
-  [
+  for (const [i, [q, opts, ans, exp]] of ([
     ['What is the SI unit of electric flux?', ['N·m²/C', 'V/m', 'J/C', 'N/C'], 0, 'Electric flux Φ = E·A has units (N/C)·m² = N·m²/C.'],
     ['Which Article of the Indian Constitution guarantees the Right to Equality before Law?', ['Article 14', 'Article 19', 'Article 21', 'Article 32'], 0, 'Article 14 ensures equality before the law and equal protection of laws.'],
     ['Which organelle is known as the powerhouse of the cell?', ['Golgi apparatus', 'Mitochondria', 'Ribosome', 'Lysosome'], 1, 'Mitochondria generate ATP through cellular respiration.'],
     ['What is the derivative of sin(2x) with respect to x?', ['cos(2x)', '2cos(2x)', '-2cos(2x)', '2sin(2x)'], 1, 'By chain rule, d/dx[sin(2x)] = 2cos(2x).'],
     ['Which schedule of the Indian Constitution lists the official languages?', ['Seventh Schedule', 'Eighth Schedule', 'Ninth Schedule', 'Tenth Schedule'], 1, 'The Eighth Schedule currently recognizes 22 official languages.'],
-  ].forEach(([q, opts, ans, exp], i) => {
-    insertQ.run(t4, q as string, JSON.stringify(opts), ans as number, 2, exp as string, i + 1);
-  });
+  ]).entries()) {
+    (await dbRun(insertQSql, [t4, q as string, JSON.stringify(opts), ans as number, 2, exp as string, i + 1]));
+  }
 
   // Subscription Plans
-  const insertPlan = db.prepare(`
+  const insertPlanSql = `
     INSERT INTO subscription_plans (name, slug, price, duration_months, badge, features_json, is_popular, is_active)
     VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-  `);
-  insertPlan.run(
+  `;
+  (await dbRun(insertPlanSql, [
     'Basic Plan',
     'basic-plan',
     1499,
@@ -1385,8 +1459,8 @@ function seedDatabase(): void {
       'Completion Certificate',
     ]),
     0
-  );
-  insertPlan.run(
+  ]));
+  (await dbRun(insertPlanSql, [
     'Pro Plan',
     'pro-plan',
     2499,
@@ -1400,8 +1474,8 @@ function seedDatabase(): void {
       'Official Verified Certificates',
     ]),
     1
-  );
-  insertPlan.run(
+  ]));
+  (await dbRun(insertPlanSql, [
     'Premium Plan',
     'premium-plan',
     3999,
@@ -1415,33 +1489,33 @@ function seedDatabase(): void {
       'Interview Prep & Resume Review',
     ]),
     0
-  );
+  ]));
 
   // Public Learner Testimonials (non-transactional display reviews)
-  const insertReview = db.prepare(
+  const insertReviewSql = 
     'INSERT INTO reviews (course_id, student_id, student_name, rating, comment) VALUES (?, ?, ?, ?, ?)'
-  );
-  insertReview.run(
+  ;
+  (await dbRun(insertReviewSql, [
     courseIds['spoken-english'],
     null,
     'Aarav Verma',
     5,
     'Dr. Ananya’s speaking exercises helped me clear my campus HR round with complete confidence!'
-  );
-  insertReview.run(
+  ]));
+  (await dbRun(insertReviewSql, [
     courseIds['it-and-programming-courses'],
     null,
     'Sneha Kulkarni',
     5,
     'Very practical Python and Java lessons. The assignments and live doubt solving are worth every rupee.'
-  );
-  insertReview.run(
+  ]));
+  (await dbRun(insertReviewSql, [
     courseIds['jee-neet-preparation'],
     null,
     'Karthik N.',
     5,
     'Crystal clear Physics and Mechanics explanations from Prof. Vikram Reddy.'
-  );
+  ]));
 
   // Dynamic CMS Settings (Admin-editable and used everywhere on public website)
   const cmsDefaults: Record<string, unknown> = {
@@ -1523,12 +1597,12 @@ function seedDatabase(): void {
     },
   };
 
-  const insertCms = db.prepare('INSERT INTO cms_settings (key, value_json) VALUES (?, ?)');
+  const insertCmsSql = 'INSERT INTO cms_settings (key, value_json) VALUES (?, ?)';
   for (const [k, v] of Object.entries(cmsDefaults)) {
-    insertCms.run(k, JSON.stringify(v));
+    (await dbRun(insertCmsSql, [k, JSON.stringify(v)]));
   }
   void adminId;
 }
 
-export default db;
+
 

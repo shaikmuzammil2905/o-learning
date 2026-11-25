@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Image as ImageIcon, Loader2, RefreshCw, Trash2, UploadCloud } from 'lucide-react';
-import { getOptimizedCloudinaryUrl, uploadImageAsset } from '../../lib/cloudinary';
+import { uploadMediaToS3 } from '../../lib/s3';
 
 interface ImageUploaderProps {
   label: string;
@@ -30,7 +30,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     setError('');
     setUploading(true);
     try {
-      const result = await uploadImageAsset(file, folder);
+      const result = await uploadMediaToS3(file, folder);
       onChange(result.url);
     } catch (err) {
       setError((err as Error).message || 'Image upload failed.');
@@ -40,7 +40,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     }
   };
 
-  const previewUrl = value ? getOptimizedCloudinaryUrl(value, 640) : '';
+  const previewUrl = value || '';
 
   return (
     <div className="space-y-2">

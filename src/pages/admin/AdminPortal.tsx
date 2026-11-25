@@ -42,6 +42,7 @@ import { AdminCourseModal, type CourseEditorInitial } from '../../components/adm
 import { AdminQuizModal, type QuizRow } from '../../components/admin/AdminQuizModal';
 import { ImageUploader } from '../../components/admin/ImageUploader';
 import { api } from '../../lib/api';
+import { uploadMediaToS3 } from '../../lib/s3';
 import { broadcastPlatformUpdate, subscribePlatformUpdates } from '../../lib/realtime';
 import { useSite, mergeOverrides } from '../../context/SiteContext';
 import type { PdfResource, VideoResource } from '../../types';
@@ -568,41 +569,17 @@ export function AdminPortal({ section }: { section: AdminSection }) {
 
   const uploadFileToS3 = async (file: File): Promise<string> => {
     setIsUploadingAsset(true);
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const dataUrl = reader.result as string;
-          const ec2Url = (import.meta as any).env?.VITE_EC2_BACKEND_URL || 'http://3.27.28.199:5000';
-          const res = await fetch(`${ec2Url}/api/upload`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              filename: file.name,
-              contentType: file.type || 'application/octet-stream',
-              dataUrl,
-            }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.url) {
-              setIsUploadingAsset(false);
-              return resolve(data.url);
-            }
-          }
-          setIsUploadingAsset(false);
-          resolve(dataUrl);
-        } catch {
-          setIsUploadingAsset(false);
-          resolve(reader.result as string);
-        }
-      };
-      reader.onerror = (err) => {
-        setIsUploadingAsset(false);
-        reject(err);
-      };
-      reader.readAsDataURL(file);
-    });
+    try {
+      const isVideo = file.type.startsWith('video/');
+      const isPdf = file.type === 'application/pdf';
+      const result = await uploadMediaToS3(file, isVideo ? 'o-learning/videos' : isPdf ? 'o-learning/pdfs' : 'o-learning/assets', {
+        allowedTypes: [],
+        maxSizeBytes: isVideo ? 500 * 1024 * 1024 : 50 * 1024 * 1024,
+      });
+      return result.url;
+    } finally {
+      setIsUploadingAsset(false);
+    }
   };
 
   const handleSavePdf = async (e: React.FormEvent) => {

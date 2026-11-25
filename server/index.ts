@@ -6,18 +6,25 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import compression from 'compression';
-import { initDatabase } from './db.js';
-import db from './db.js';
+import { dbAll, initDatabase } from './db.js';
 import authRoutes from './routes/auth.js';
 import publicRoutes from './routes/public.js';
 import studentRoutes from './routes/student.js';
 import facultyRoutes from './routes/faculty.js';
 import adminRoutes from './routes/admin.js';
 
-initDatabase();
+const dbReady = initDatabase().catch((err) => {
+  console.error('[Database Init Error]', err);
+  process.exit(1);
+});
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
+
+app.use(async (_req, _res, next) => {
+  await dbReady;
+  next();
+});
 
 app.use(
   helmet({
@@ -32,7 +39,7 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({ limit: '25mb' }));
 app.use(cookieParser());
 
 // Health Check
@@ -48,21 +55,23 @@ app.use('/api/faculty', facultyRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Dynamic XML Sitemap for SEO
-app.get('/sitemap.xml', (req, res) => {
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
-  const courses = db
-    .prepare('SELECT slug FROM courses WHERE is_published = 1')
-    .all() as Array<{ slug: string }>;
-  const staticRoutes = ['', '/courses', '/tests', '/batches', '/plans', '/about', '/contact', '/verify-certificate'];
-  const urls = [
-    ...staticRoutes.map((r) => `${baseUrl}${r}`),
-    ...courses.map((c) => `${baseUrl}/courses/${c.slug}`),
-  ];
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls
-    .map((u) => `  <url><loc>${u}</loc><changefreq>weekly</changefreq></url>`)
-    .join('\n')}\n</urlset>`;
-  res.setHeader('Content-Type', 'application/xml');
-  res.send(xml);
+app.get('/sitemap.xml', async (req, res, next) => {
+  try {
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const courses = await dbAll<{ slug: string }>('SELECT slug FROM courses WHERE is_published = 1');
+    const staticRoutes = ['', '/courses', '/tests', '/batches', '/plans', '/about', '/contact', '/verify-certificate'];
+    const urls = [
+      ...staticRoutes.map((r) => `${baseUrl}${r}`),
+      ...courses.map((c) => `${baseUrl}/courses/${c.slug}`),
+    ];
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls
+      .map((u) => `  <url><loc>${u}</loc><changefreq>weekly</changefreq></url>`)
+      .join('\n')}\n</urlset>`;
+    res.setHeader('Content-Type', 'application/xml');
+    res.send(xml);
+  } catch (err) {
+    next(err);
+  }
 });
 
 // Serve uploaded assets & static assets & built Vite frontend

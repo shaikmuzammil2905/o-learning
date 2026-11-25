@@ -2,17 +2,40 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { api } from '../lib/api';
 import type { User } from '../types';
 
+export interface RegisterPayload {
+  full_name: string;
+  mobile: string;
+  email: string;
+  password: string;
+  confirm_password: string;
+  referral_code?: string;
+}
+
+export interface GoogleAuthResponse {
+  needsProfileCompletion: boolean;
+  user?: User;
+  token?: string;
+  pendingToken?: string;
+  profile?: {
+    email: string;
+    full_name: string;
+    avatar_url: string | null;
+  };
+}
+
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
   refreshUser: () => Promise<void>;
   login: (identifier: string, password: string, rememberMe?: boolean) => Promise<User>;
-  register: (payload: {
+  sendRegisterOtp: (payload: RegisterPayload) => Promise<{ message: string }>;
+  verifyRegisterOtp: (email: string, otp: string) => Promise<User>;
+  loginWithGoogle: (credential: string) => Promise<GoogleAuthResponse>;
+  completeGoogleProfile: (payload: {
+    pendingToken: string;
     full_name: string;
     mobile: string;
-    email: string;
-    password: string;
-    confirm_password: string;
+    password?: string;
     referral_code?: string;
   }) => Promise<User>;
   logout: () => Promise<void>;
@@ -42,6 +65,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return true;
   });
 
+  const persistSession = (nextUser: User, token?: string) => {
+    if (typeof window !== 'undefined') {
+      if (token) localStorage.setItem('olearn_token', token);
+      localStorage.setItem('olearn_user', JSON.stringify(nextUser));
+    }
+    setUser(nextUser);
+  };
+
   const refreshUser = useCallback(async () => {
     try {
       const data = await api<{ user: User }>('/api/auth/me');
@@ -69,31 +100,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       method: 'POST',
       body: JSON.stringify({ identifier, password, rememberMe }),
     });
-    if (typeof window !== 'undefined' && data.token) {
-      localStorage.setItem('olearn_token', data.token);
-      localStorage.setItem('olearn_user', JSON.stringify(data.user));
-    }
-    setUser(data.user);
+    persistSession(data.user, data.token);
     return data.user;
   };
 
-  const register = async (payload: {
-    full_name: string;
-    mobile: string;
-    email: string;
-    password: string;
-    confirm_password: string;
-    referral_code?: string;
-  }) => {
-    const data = await api<{ user: User; token: string }>('/api/auth/register', {
+  const sendRegisterOtp = async (payload: RegisterPayload) => {
+    return api<{ ok: boolean; message: string }>('/api/auth/register/send-otp', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    if (typeof window !== 'undefined' && data.token) {
-      localStorage.setItem('olearn_token', data.token);
-      localStorage.setItem('olearn_user', JSON.stringify(data.user));
+  };
+
+  const verifyRegisterOtp = async (email: string, otp: string) => {
+    const data = await api<{ user: User; token: string }>('/api/auth/register/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp }),
+    });
+    persistSession(data.user, data.token);
+    return data.user;
+  };
+
+  const loginWithGoogle = async (credential: string) => {
+    const data = await api<GoogleAuthResponse>('/api/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential }),
+    });
+    if (!data.needsProfileCompletion && data.user) {
+      persistSession(data.user, data.token);
     }
-    setUser(data.user);
+    return data;
+  };
+
+  const completeGoogleProfile = async (payload: {
+    pendingToken: string;
+    full_name: string;
+    mobile: string;
+    password?: string;
+    referral_code?: string;
+  }) => {
+    const data = await api<{ user: User; token: string }>('/api/auth/google/complete-profile', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    persistSession(data.user, data.token);
     return data.user;
   };
 
@@ -110,7 +159,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, refreshUser, login, register, logout, setUser }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        refreshUser,
+        login,
+        sendRegisterOtp,
+        verifyRegisterOtp,
+        loginWithGoogle,
+        completeGoogleProfile,
+        logout,
+        setUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -121,4 +183,3 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
   return ctx;
 }
-
