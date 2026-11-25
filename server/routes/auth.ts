@@ -133,12 +133,14 @@ router.post(
       return;
     }
 
-    const existing = await dbGet('SELECT id FROM users WHERE email = ? OR mobile = ?', [
-      cleanEmail,
-      cleanMobile,
-    ]);
-    if (existing) {
-      res.status(409).json({ error: 'An account with this email or mobile number already exists.' });
+    const emailConflict = await dbGet('SELECT id FROM users WHERE email = ?', [cleanEmail]);
+    if (emailConflict) {
+      res.status(409).json({ error: 'This email address is already registered. Please use a different email or log in.', field: 'email' });
+      return;
+    }
+    const mobileConflict = await dbGet('SELECT id FROM users WHERE mobile = ?', [cleanMobile]);
+    if (mobileConflict) {
+      res.status(409).json({ error: 'This mobile number is already registered. Please use a different number or log in.', field: 'mobile' });
       return;
     }
 
@@ -227,13 +229,16 @@ router.post(
       referral_code: string | null;
     };
 
-    const existing = await dbGet('SELECT id FROM users WHERE email = ? OR mobile = ?', [
-      pending.email,
-      pending.mobile,
-    ]);
-    if (existing) {
+    const emailConflict2 = await dbGet('SELECT id FROM users WHERE email = ?', [pending.email]);
+    if (emailConflict2) {
       await dbRun('DELETE FROM email_otps WHERE id = ?', [row.id]);
-      res.status(409).json({ error: 'An account with this email or mobile number already exists.' });
+      res.status(409).json({ error: 'This email address is already registered. Please log in instead.', field: 'email' });
+      return;
+    }
+    const mobileConflict2 = await dbGet('SELECT id FROM users WHERE mobile = ?', [pending.mobile]);
+    if (mobileConflict2) {
+      await dbRun('DELETE FROM email_otps WHERE id = ?', [row.id]);
+      res.status(409).json({ error: 'This mobile number is already registered. Please log in instead.', field: 'mobile' });
       return;
     }
 
@@ -436,12 +441,14 @@ router.post(
       return;
     }
 
-    const existing = await dbGet('SELECT id FROM users WHERE email = ? OR mobile = ?', [
-      decoded.email,
-      cleanMobile,
-    ]);
-    if (existing) {
-      res.status(409).json({ error: 'An account with this email or mobile number already exists.' });
+    const googleEmailConflict = await dbGet('SELECT id FROM users WHERE email = ? AND (google_id IS NULL OR google_id != ?)', [decoded.email, decoded.googleId]);
+    if (googleEmailConflict) {
+      res.status(409).json({ error: 'This Google email is already registered with a different account. Please log in instead.', field: 'email' });
+      return;
+    }
+    const googleMobileConflict = await dbGet('SELECT id FROM users WHERE mobile = ?', [cleanMobile]);
+    if (googleMobileConflict) {
+      res.status(409).json({ error: 'This mobile number is already registered. Please use a different number.', field: 'mobile' });
       return;
     }
 

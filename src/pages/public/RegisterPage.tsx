@@ -5,6 +5,7 @@ import { PublicLayout } from '../../components/PublicLayout';
 import { BrandLogo } from '../../components/BrandLogo';
 import { GoogleSignInButton } from '../../components/GoogleSignInButton';
 import { useAuth } from '../../context/AuthContext';
+import { ApiError } from '../../lib/api';
 
 export function RegisterPage() {
   const { sendRegisterOtp, verifyRegisterOtp, loginWithGoogle, completeGoogleProfile } = useAuth();
@@ -26,6 +27,7 @@ export function RegisterPage() {
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldError, setFieldError] = useState<{ mobile?: string; email?: string }>({});
 
   // Google profile completion state
   const [googlePendingToken, setGooglePendingToken] = useState('');
@@ -41,6 +43,7 @@ export function RegisterPage() {
     e.preventDefault();
     setError('');
     setInfo('');
+    setFieldError({});
 
     if (form.full_name.trim().length < 2) {
       setError('Please enter your full name.');
@@ -65,8 +68,17 @@ export function RegisterPage() {
       setInfo(res.message);
       setStep('otp');
       setResendCooldown(30);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send verification OTP.');
+    } catch (err: any) {
+      const field = err instanceof ApiError && err.data && typeof err.data === 'object' ? (err.data as any).field : null;
+      if (field === 'email') {
+        setFieldError({ email: err.message });
+        setError('');
+      } else if (field === 'mobile') {
+        setFieldError({ mobile: err.message });
+        setError('');
+      } else {
+        setError(err instanceof Error ? err.message : 'Could not send verification OTP.');
+      }
     } finally {
       setLoading(false);
     }
@@ -153,8 +165,14 @@ export function RegisterPage() {
         referral_code: form.referral_code || undefined,
       });
       navigate('/student');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not complete registration.');
+    } catch (err: any) {
+      const field = err instanceof ApiError && err.data && typeof err.data === 'object' ? (err.data as any).field : null;
+      if (field === 'mobile') {
+        setFieldError({ mobile: err.message });
+        setError('');
+      } else {
+        setError(err instanceof Error ? err.message : 'Could not complete registration.');
+      }
     } finally {
       setLoading(false);
     }
@@ -240,11 +258,17 @@ export function RegisterPage() {
                         type="tel"
                         required
                         value={form.mobile}
-                        onChange={(e) => setForm({ ...form, mobile: e.target.value })}
+                        onChange={(e) => { setForm({ ...form, mobile: e.target.value }); if (fieldError.mobile) setFieldError((f) => ({ ...f, mobile: undefined })); }}
                         placeholder="10-digit mobile"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:border-[#0052CC]"
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm outline-none focus:border-[#0052CC] ${fieldError.mobile ? 'border-red-400 bg-red-50' : 'border-slate-300'}`}
                       />
                     </div>
+                    {fieldError.mobile && (
+                      <p className="mt-1 text-[11px] text-red-600 font-semibold flex items-center gap-1">
+                        ⚠ {fieldError.mobile}{' '}
+                        <Link to="/login" className="underline text-[#0052CC]">Log in?</Link>
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Email Address *</label>
@@ -254,11 +278,17 @@ export function RegisterPage() {
                         type="email"
                         required
                         value={form.email}
-                        onChange={(e) => setForm({ ...form, email: e.target.value })}
+                        onChange={(e) => { setForm({ ...form, email: e.target.value }); if (fieldError.email) setFieldError((f) => ({ ...f, email: undefined })); }}
                         placeholder="you@example.com"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none focus:border-[#0052CC]"
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm outline-none focus:border-[#0052CC] ${fieldError.email ? 'border-red-400 bg-red-50' : 'border-slate-300'}`}
                       />
                     </div>
+                    {fieldError.email && (
+                      <p className="mt-1 text-[11px] text-red-600 font-semibold flex items-center gap-1">
+                        ⚠ {fieldError.email}{' '}
+                        <Link to="/login" className="underline text-[#0052CC]">Log in?</Link>
+                      </p>
+                    )}
                   </div>
                 </div>
 

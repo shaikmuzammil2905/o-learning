@@ -274,6 +274,8 @@ export function AdminPortal({ section }: { section: AdminSection }) {
 
   const [certIssueOpen, setCertIssueOpen] = useState(false);
   const [certForm, setCertForm] = useState({ student_id: '', course_id: '' });
+  const [certLearnerSearch, setCertLearnerSearch] = useState('');
+  const [certLearnerDropOpen, setCertLearnerDropOpen] = useState(false);
 
   const [paymentStatusFilter, setPaymentStatusFilter] = useState('all');
   const [autoPollPayments, setAutoPollPayments] = useState(false);
@@ -3396,8 +3398,14 @@ export function AdminPortal({ section }: { section: AdminSection }) {
           <form
             onSubmit={async (e) => {
               e.preventDefault();
+              if (!certForm.student_id || !certForm.course_id) {
+                alert('Please select both a learner and a course.');
+                return;
+              }
               await api('/api/admin/certificates', { method: 'POST', body: JSON.stringify(certForm) });
               setCertIssueOpen(false);
+              setCertLearnerSearch('');
+              setCertLearnerDropOpen(false);
               notify('Certificate issued successfully.');
               loadData();
             }}
@@ -3405,24 +3413,93 @@ export function AdminPortal({ section }: { section: AdminSection }) {
           >
             <div className="flex items-center justify-between">
               <h3 className="font-display text-lg font-bold text-white">Issue Completion Certificate</h3>
-              <button type="button" onClick={() => setCertIssueOpen(false)} className="text-slate-400 cursor-pointer">
+              <button type="button" onClick={() => { setCertIssueOpen(false); setCertLearnerSearch(''); setCertLearnerDropOpen(false); }} className="text-slate-400 cursor-pointer">
                 <X className="h-5 w-5" />
               </button>
             </div>
+
+            {/* Searchable Learner Picker */}
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Select Learner</label>
-              <select
-                value={certForm.student_id}
-                onChange={(e) => setCertForm({ ...certForm, student_id: e.target.value })}
-                className={inputCls}
-              >
-                {usersList.map((u) => (
-                  <option key={String(u.id)} value={String(u.id)}>
-                    {String(u.full_name)} ({String(u.email)})
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                {/* Search input */}
+                <div className="flex items-center gap-2 w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2.5 focus-within:border-[#FF7A00] transition">
+                  <Search className="h-4 w-4 text-slate-400 shrink-0" />
+                  <input
+                    type="text"
+                    value={certLearnerSearch}
+                    onFocus={() => setCertLearnerDropOpen(true)}
+                    onChange={(e) => { setCertLearnerSearch(e.target.value); setCertLearnerDropOpen(true); }}
+                    placeholder="Search by name, email, or mobile…"
+                    className="flex-1 bg-transparent text-sm text-white outline-none placeholder-slate-500"
+                  />
+                  {certForm.student_id && !certLearnerDropOpen && (
+                    <button type="button" onClick={() => { setCertForm({ ...certForm, student_id: '' }); setCertLearnerSearch(''); setCertLearnerDropOpen(true); }} className="text-slate-500 hover:text-rose-400 cursor-pointer">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Selected learner badge */}
+                {certForm.student_id && !certLearnerDropOpen && (() => {
+                  const sel = usersList.find((u) => String(u.id) === certForm.student_id);
+                  return sel ? (
+                    <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                      <span className="font-semibold truncate">{String(sel.full_name)}</span>
+                      <span className="text-emerald-400/70 shrink-0">({String(sel.email)})</span>
+                      {sel.mobile && <span className="text-emerald-400/50 shrink-0">· {String(sel.mobile)}</span>}
+                    </div>
+                  ) : null;
+                })()}
+
+                {/* Dropdown list */}
+                {certLearnerDropOpen && (() => {
+                  const q = certLearnerSearch.trim().toLowerCase();
+                  const filtered = usersList.filter((u) =>
+                    !q ||
+                    String(u.full_name || '').toLowerCase().includes(q) ||
+                    String(u.email || '').toLowerCase().includes(q) ||
+                    String(u.mobile || '').includes(q)
+                  );
+                  return (
+                    <div className="absolute z-50 mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden">
+                      {filtered.length === 0 ? (
+                        <div className="px-4 py-3 text-xs text-slate-400 text-center">No learners match "{certLearnerSearch}"</div>
+                      ) : (
+                        <div className="max-h-56 overflow-y-auto">
+                          {filtered.map((u) => (
+                            <button
+                              key={String(u.id)}
+                              type="button"
+                              onClick={() => {
+                                setCertForm({ ...certForm, student_id: String(u.id) });
+                                setCertLearnerSearch('');
+                                setCertLearnerDropOpen(false);
+                              }}
+                              className={`w-full text-left px-4 py-2.5 flex flex-col gap-0.5 hover:bg-slate-800 transition cursor-pointer ${
+                                certForm.student_id === String(u.id) ? 'bg-blue-900/40 border-l-2 border-[#FF7A00]' : ''
+                              }`}
+                            >
+                              <span className="text-sm font-semibold text-white truncate">{String(u.full_name)}</span>
+                              <span className="text-[11px] text-slate-400 truncate">
+                                {String(u.email)}
+                                {u.mobile ? ` · ${String(u.mobile)}` : ''}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+              {/* Click-away to close */}
+              {certLearnerDropOpen && (
+                <div className="fixed inset-0 z-40" onClick={() => setCertLearnerDropOpen(false)} />
+              )}
             </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Select Course</label>
               <select
@@ -3430,6 +3507,7 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                 onChange={(e) => setCertForm({ ...certForm, course_id: e.target.value })}
                 className={inputCls}
               >
+                <option value="">— Choose a course —</option>
                 {courses.map((c) => (
                   <option key={String(c.id)} value={String(c.id)}>
                     {String(c.title)}
@@ -3438,10 +3516,10 @@ export function AdminPortal({ section }: { section: AdminSection }) {
               </select>
             </div>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setCertIssueOpen(false)} className={btnGhost}>
+              <button type="button" onClick={() => { setCertIssueOpen(false); setCertLearnerSearch(''); setCertLearnerDropOpen(false); }} className={btnGhost}>
                 Cancel
               </button>
-              <button type="submit" className={btnPrimary}>
+              <button type="submit" className={btnPrimary} disabled={!certForm.student_id || !certForm.course_id}>
                 Issue Certificate
               </button>
             </div>
