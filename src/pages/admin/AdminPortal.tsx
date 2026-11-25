@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
+  AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
   Award,
@@ -269,6 +270,7 @@ export function AdminPortal({ section }: { section: AdminSection }) {
 
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [userStatusFilter, setUserStatusFilter] = useState('all');
   const [editingUser, setEditingUser] = useState<Record<string, any> | null>(null);
   const [viewingUser, setViewingUser] = useState<Record<string, any> | null>(null);
 
@@ -467,14 +469,26 @@ export function AdminPortal({ section }: { section: AdminSection }) {
         (userRoleFilter === 'USER' && role === 'student') ||
         (userRoleFilter === 'ADMIN' && role === 'admin') ||
         (userRoleFilter === 'FACULTY' && role === 'faculty');
+
+      const isDel = Boolean(u.deleted_at || (u as any).da_deleted_at);
+      const statusOk =
+        userStatusFilter === 'all' ||
+        (userStatusFilter === 'active' && Number(u.is_active) === 1 && !isDel) ||
+        (userStatusFilter === 'disabled' && Number(u.is_active) === 0 && !isDel) ||
+        (userStatusFilter === 'deleted' && isDel);
+
       const qOk =
         !q ||
         String(u.full_name || '').toLowerCase().includes(q) ||
         String(u.email || '').toLowerCase().includes(q) ||
-        String(u.mobile || '').includes(q);
-      return roleOk && qOk;
+        String(u.mobile || '').includes(q) ||
+        String((u as any).original_name || '').toLowerCase().includes(q) ||
+        String((u as any).original_email || '').toLowerCase().includes(q) ||
+        String((u as any).original_mobile || '').includes(q);
+
+      return roleOk && statusOk && qOk;
     });
-  }, [usersList, userSearch, userRoleFilter]);
+  }, [usersList, userSearch, userRoleFilter, userStatusFilter]);
 
   const toggleCoursePublish = async (c: Record<string, unknown>) => {
     const nextPublished = Number(c.is_published) === 1 ? 0 : 1;
@@ -2145,6 +2159,16 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                   <option value="FACULTY">FACULTY</option>
                   <option value="ADMIN">ADMIN</option>
                 </select>
+                <select
+                  value={userStatusFilter}
+                  onChange={(e) => setUserStatusFilter(e.target.value)}
+                  className={`${inputCls} w-auto py-2 text-xs`}
+                >
+                  <option value="all">All Status</option>
+                  <option value="active">Active Only</option>
+                  <option value="disabled">Disabled Only</option>
+                  <option value="deleted">Deleted by User</option>
+                </select>
               </div>
 
               <div className={`${cardCls} overflow-hidden`}>
@@ -2170,15 +2194,31 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                         </tr>
                       ) : (
                       filteredUsers.map((u) => {
+                        const isDeleted = Boolean(u.deleted_at || (u as any).da_deleted_at);
+                        const displayName = (u as any).original_name || u.full_name;
+                        const displayEmail = (u as any).original_email || u.email;
+                        const displayMobile = (u as any).original_mobile || u.mobile;
                         const roleDisp =
                           u.role === 'admin' ? 'ADMIN' : u.role === 'faculty' ? 'FACULTY' : 'USER';
                         return (
-                          <tr key={String(u.id)} className="hover:bg-slate-800/30">
+                          <tr key={String(u.id)} className={`hover:bg-slate-800/30 ${isDeleted ? 'bg-red-950/10' : ''}`}>
                             <td className="py-3 px-4">
-                              <p className="font-bold text-slate-100">{String(u.full_name)}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-bold text-slate-100">{String(displayName)}</p>
+                                {isDeleted && (
+                                  <span className="rounded px-1.5 py-0.5 text-[9px] font-bold bg-red-500/20 text-red-300 border border-red-500/30">
+                                    Deleted
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-[11px] text-slate-400">
-                                {String(u.email)} · {String(u.mobile || '—')}
+                                {String(displayEmail)} · {String(displayMobile || '—')}
                               </p>
+                              {isDeleted && u.deletion_reason && (
+                                <p className="text-[10px] text-amber-400/80 italic mt-0.5">
+                                  Reason: {String(u.deletion_reason)}
+                                </p>
+                              )}
                             </td>
                             <td className="py-3 px-3">
                               <span
@@ -2198,15 +2238,19 @@ export function AdminPortal({ section }: { section: AdminSection }) {
                             </td>
                             <td className="py-3 px-3 text-slate-300">{Number(u.enrollments_count || 0)}</td>
                             <td className="py-3 px-3">
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                                  Number(u.is_active) === 1
-                                    ? 'bg-emerald-500/15 text-emerald-300'
-                                    : 'bg-rose-500/15 text-rose-300'
-                                }`}
-                              >
-                                {Number(u.is_active) === 1 ? 'Active' : 'Disabled'}
-                              </span>
+                              {isDeleted ? (
+                                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/30">
+                                  Deleted by User
+                                </span>
+                              ) : Number(u.is_active) === 1 ? (
+                                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-emerald-500/15 text-emerald-300">
+                                  Active
+                                </span>
+                              ) : (
+                                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-rose-500/15 text-rose-300">
+                                  Disabled
+                                </span>
+                              )}
                             </td>
                             <td className="py-3 px-3 text-slate-400">
                               {String(u.created_at || '').slice(0, 10)}
@@ -3363,13 +3407,47 @@ export function AdminPortal({ section }: { section: AdminSection }) {
           <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-[#0F172A] p-6 space-y-4 max-h-[88vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-display text-lg font-bold text-white">{viewingUser.user?.full_name}</h3>
-                <p className="text-xs text-slate-400">{viewingUser.user?.email} · Credits ₹{viewingUser.user?.credits || 0}</p>
+                <h3 className="font-display text-lg font-bold text-white">
+                  {viewingUser.deleted_info?.full_name || viewingUser.user?.full_name}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {viewingUser.deleted_info?.email || viewingUser.user?.email} · Credits ₹{viewingUser.user?.credits || 0}
+                </p>
               </div>
               <button type="button" onClick={() => setViewingUser(null)} className="text-slate-400 cursor-pointer">
                 <X className="h-5 w-5" />
               </button>
             </div>
+
+            {viewingUser.deleted_info && (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3.5 text-xs space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-red-400 text-sm">
+                  <AlertTriangle className="h-4 w-4" /> Account Deleted by User
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300 pt-1">
+                  <div>
+                    <span className="text-slate-400">Original Name:</span> {viewingUser.deleted_info.full_name}
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Original Email:</span> {viewingUser.deleted_info.email}
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Original Mobile:</span> {viewingUser.deleted_info.mobile || '—'}
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Deleted At:</span> {new Date(viewingUser.deleted_info.deleted_at).toLocaleString()}
+                  </div>
+                </div>
+                {viewingUser.deleted_info.deletion_reason && (
+                  <p className="text-amber-300 pt-1 border-t border-red-500/20">
+                    <span className="font-semibold text-amber-400">Reason:</span> {viewingUser.deleted_info.deletion_reason}
+                  </p>
+                )}
+                <div className="text-emerald-400 font-semibold pt-1">
+                  Total Payments Preserved: ₹{Number(viewingUser.deleted_info.total_payments_received || 0).toLocaleString('en-IN')}
+                </div>
+              </div>
+            )}
             <div className="grid gap-3 sm:grid-cols-2 text-xs">
               <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
                 <p className="font-bold text-[#FF7A00] mb-2">Enrollments ({viewingUser.enrollments?.length || 0})</p>

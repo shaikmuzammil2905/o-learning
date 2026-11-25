@@ -277,20 +277,25 @@ router.get('/students', asyncHandler(async (req, res) => {
   const { search = '', status = 'all' } = req.query;
   let sql = `
     SELECT u.id, u.full_name, u.email, u.mobile, u.referral_code, u.is_active, u.created_at,
+           u.deleted_at, u.deletion_reason,
+           da.full_name as original_name, da.email as original_email, da.mobile as original_mobile,
+           da.deleted_at as da_deleted_at, da.deleted_by,
            (SELECT COUNT(*) FROM enrollments e WHERE e.student_id = u.id) as enrollments_count,
            (SELECT COUNT(*) FROM certificates cert WHERE cert.student_id = u.id) as certificates_count,
            (SELECT COALESCE(SUM(p.final_amount), 0) FROM payments p WHERE p.student_id = u.id AND p.status = 'successful') as total_spent
     FROM users u
+    LEFT JOIN deleted_accounts da ON da.original_user_id = u.id
     WHERE u.role = 'student'
   `;
   const params: Array<string | number> = [];
   if (search) {
-    sql += ' AND (LOWER(u.full_name) LIKE ? OR LOWER(u.email) LIKE ? OR u.mobile LIKE ?)';
+    sql += ' AND (LOWER(u.full_name) LIKE ? OR LOWER(u.email) LIKE ? OR u.mobile LIKE ? OR LOWER(COALESCE(da.full_name, \'\')) LIKE ? OR LOWER(COALESCE(da.email, \'\')) LIKE ?)';
     const q = `%${String(search).toLowerCase()}%`;
-    params.push(q, q, `%${search}%`);
+    params.push(q, q, `%${search}%`, q, q);
   }
-  if (status === 'active') sql += ' AND u.is_active = 1';
-  if (status === 'inactive') sql += ' AND u.is_active = 0';
+  if (status === 'active') sql += ' AND u.is_active = 1 AND u.deleted_at IS NULL';
+  if (status === 'inactive') sql += ' AND u.is_active = 0 AND u.deleted_at IS NULL';
+  if (status === 'deleted') sql += ' AND (u.deleted_at IS NOT NULL OR da.id IS NOT NULL)';
   sql += ' ORDER BY u.created_at DESC';
   res.json((await dbAll(sql, params)));
 }));
@@ -330,10 +335,14 @@ router.get('/users', asyncHandler(async (req, res) => {
   let sql = `
     SELECT u.id, u.full_name, u.email, u.mobile, u.role, u.referral_code,
            COALESCE(u.credits, 0) as credits, u.is_active, u.created_at,
+           u.deleted_at, u.deletion_reason,
+           da.full_name as original_name, da.email as original_email, da.mobile as original_mobile,
+           da.deleted_at as da_deleted_at, da.deleted_by,
            (SELECT COUNT(*) FROM enrollments e WHERE e.student_id = u.id) as enrollments_count,
            (SELECT COUNT(*) FROM certificates cert WHERE cert.student_id = u.id) as certificates_count,
            (SELECT COALESCE(SUM(p.final_amount), 0) FROM payments p WHERE p.student_id = u.id AND p.status = 'successful') as total_spent
     FROM users u
+    LEFT JOIN deleted_accounts da ON da.original_user_id = u.id
     WHERE 1=1
   `;
   const params: Array<string | number> = [];
@@ -341,9 +350,9 @@ router.get('/users', asyncHandler(async (req, res) => {
     sql += " AND u.role != 'admin'";
   }
   if (search) {
-    sql += ' AND (LOWER(u.full_name) LIKE ? OR LOWER(u.email) LIKE ? OR u.mobile LIKE ?)';
+    sql += ' AND (LOWER(u.full_name) LIKE ? OR LOWER(u.email) LIKE ? OR u.mobile LIKE ? OR LOWER(COALESCE(da.full_name, \'\')) LIKE ? OR LOWER(COALESCE(da.email, \'\')) LIKE ?)';
     const q = `%${String(search).toLowerCase()}%`;
-    params.push(q, q, `%${search}%`);
+    params.push(q, q, `%${search}%`, q, q);
   }
   if (role && role !== 'all') {
     const dbRole = mapRoleToDb(String(role));
@@ -352,19 +361,31 @@ router.get('/users', asyncHandler(async (req, res) => {
       params.push(dbRole);
     }
   }
-  if (status === 'active') sql += ' AND u.is_active = 1';
-  if (status === 'inactive') sql += ' AND u.is_active = 0';
+  if (status === 'active') sql += ' AND u.is_active = 1 AND u.deleted_at IS NULL';
+  if (status === 'inactive') sql += ' AND u.is_active = 0 AND u.deleted_at IS NULL';
+  if (status === 'deleted') sql += ' AND (u.deleted_at IS NOT NULL OR da.id IS NOT NULL)';
   sql += ' ORDER BY u.created_at DESC';
   res.json((await dbAll(sql, params)));
 }));
 
+router.get('/deleted-accounts', asyncHandler(async (_req, res) => {
+  const rows = await dbAll(`
+    SELECT da.*,
+           (SELECT COUNT(*) FROM payments p WHERE p.student_id = da.original_user_id AND p.status = 'successful') as successful_payments_count
+    FROM deleted_accounts da
+    ORDER BY da.deleted_at DESC
+  `);
+  res.json(rows);
+}));
+
 router.get('/users/:id', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const user = (await dbGet('SELECT id, full_name, email, mobile, role, referral_code, COALESCE(credits, 0) as credits, is_active, created_at FROM users WHERE id = ?', [id]));
+  const user = (await dbGet('SELECT id, full_name, email, mobile, role, referral_code, COALESCE(credits, 0) as credits, is_active, deleted_at, deletion_reason, created_at FROM users WHERE id = ?', [id]));
   if (!user) {
     res.status(404).json({ error: 'User not found.' });
     return;
   }
+  const deletedInfo = (await dbGet('SELECT * FROM deleted_accounts WHERE original_user_id = ? ORDER BY id DESC LIMIT 1', [id]));
   const enrollments = (await dbAll('SELECT e.*, c.title as course_title FROM enrollments e JOIN courses c ON c.id = e.course_id WHERE e.student_id = ?', [id]));
   const payments = (await dbAll('SELECT * FROM payments WHERE student_id = ? ORDER BY created_at DESC', [id]));
   const certificates = (await dbAll('SELECT * FROM certificates WHERE student_id = ? ORDER BY issued_at DESC', [id]));
@@ -376,7 +397,7 @@ router.get('/users/:id', asyncHandler(async (req, res) => {
       WHERE cra.referrer_id = ?
       ORDER BY cra.created_at DESC
     `, [id]));
-  res.json({ user, enrollments, payments, certificates, referrals });
+  res.json({ user, deleted_info: deletedInfo, enrollments, payments, certificates, referrals });
 }));
 
 router.put('/users/:id', asyncHandler(async (req, res) => {

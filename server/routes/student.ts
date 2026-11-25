@@ -856,5 +856,94 @@ router.post('/notifications/read', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// DELETE student account (self-service account deletion)
+router.delete('/account', asyncHandler(async (req, res) => {
+  const sid = req.user!.id;
+  const user = (await dbGet('SELECT * FROM users WHERE id = ?', [sid])) as
+    | { id: number; full_name: string; email: string; mobile: string; referral_code: string; role: string }
+    | undefined;
+
+  if (!user) {
+    res.status(404).json({ error: 'User not found.' });
+    return;
+  }
+
+  if (user.role === 'admin') {
+    res.status(400).json({ error: 'Admin accounts cannot be deleted through student portal.' });
+    return;
+  }
+
+  const { reason = 'User requested account deletion via profile page' } = req.body || {};
+
+  // 1. Fetch payments for snapshot
+  const payments = (await dbAll(
+    'SELECT id, order_ref, item_type, item_id, item_title, amount, discount_amount, final_amount, method, status, gateway_txn_id, created_at FROM payments WHERE student_id = ? ORDER BY created_at DESC',
+    [sid]
+  )) as Array<{ final_amount: number; status: string }>;
+
+  const totalPayments = payments
+    .filter((p) => p.status === 'successful')
+    .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
+
+  // 2. Fetch enrollments count
+  const enrollmentsCountRow = (await dbGet<{ c: number }>(
+    'SELECT COUNT(*) as c FROM enrollments WHERE student_id = ?',
+    [sid]
+  ));
+  const enrollmentsCount = Number(enrollmentsCountRow?.c || 0);
+
+  // 3. Store full snapshot in deleted_accounts for admin records & auditing
+  await dbRun(
+    `INSERT INTO deleted_accounts (
+      original_user_id, full_name, email, mobile, referral_code, role,
+      total_payments_received, payments_snapshot_json, enrollments_count,
+      deletion_reason, deleted_by, deleted_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'user', NOW())`,
+    [
+      sid,
+      user.full_name,
+      user.email,
+      user.mobile || '',
+      user.referral_code || '',
+      user.role || 'student',
+      totalPayments,
+      JSON.stringify(payments),
+      enrollmentsCount,
+      String(reason).slice(0, 500),
+    ]
+  );
+
+  // 4. Anonymize user row so unique constraints (email, mobile) are released,
+  // while keeping user ID intact so historical payments foreign keys don't break
+  const timestamp = Date.now();
+  const anonymizedEmail = `deleted_${sid}_${timestamp}@deleted.invalid`;
+  const anonymizedMobile = `DEL_${sid}_${timestamp}`.slice(0, 20);
+  const anonymizedName = `${user.full_name} (Deleted Account)`;
+
+  await dbRun(
+    `UPDATE users
+     SET full_name = ?,
+         email = ?,
+         mobile = ?,
+         password_hash = 'DELETED_ACCOUNT',
+         avatar_url = NULL,
+         google_id = NULL,
+         is_active = 0,
+         deleted_at = NOW(),
+         deletion_reason = ?
+     WHERE id = ?`,
+    [anonymizedName, anonymizedEmail, anonymizedMobile, String(reason).slice(0, 500), sid]
+  );
+
+  // 5. Clean up any active sessions / notifications / OTPs
+  await dbRun('DELETE FROM notifications WHERE user_id = ?', [sid]);
+  await dbRun('DELETE FROM email_otps WHERE email = ?', [user.email]);
+
+  res.json({
+    ok: true,
+    message: 'Your account has been deleted successfully. You will be logged out.',
+  });
+}));
+
 export default router;
 

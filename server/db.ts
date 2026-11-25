@@ -100,7 +100,26 @@ export async function initDatabase(): Promise<void> {
       referral_code TEXT NOT NULL UNIQUE,
       referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       is_active INTEGER NOT NULL DEFAULT 1,
+      deleted_at TIMESTAMPTZ,
+      deletion_reason TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Soft-delete snapshot: preserves PII + payment history for admin records
+    CREATE TABLE IF NOT EXISTS deleted_accounts (
+      id SERIAL PRIMARY KEY,
+      original_user_id INTEGER NOT NULL,
+      full_name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      mobile TEXT NOT NULL,
+      referral_code TEXT NOT NULL,
+      role TEXT NOT NULL,
+      total_payments_received INTEGER NOT NULL DEFAULT 0,
+      payments_snapshot_json TEXT NOT NULL DEFAULT '[]',
+      enrollments_count INTEGER NOT NULL DEFAULT 0,
+      deletion_reason TEXT NOT NULL DEFAULT '',
+      deleted_by TEXT NOT NULL DEFAULT 'user',
+      deleted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS faculty_profiles (
@@ -478,6 +497,8 @@ export async function initDatabase(): Promise<void> {
   await safeAddCol('users', 'google_id TEXT');
   await safeAddCol('users', 'email_verified INTEGER NOT NULL DEFAULT 0');
   await safeAddCol('users', 'profile_completed INTEGER NOT NULL DEFAULT 1');
+  await safeAddCol('users', 'deleted_at TIMESTAMPTZ');
+  await safeAddCol('users', 'deletion_reason TEXT');
   await safeAddCol('categories', "image TEXT NOT NULL DEFAULT ''");
   await safeAddCol('courses', "banner_image TEXT NOT NULL DEFAULT ''");
   await safeAddCol('courses', "preview_image TEXT NOT NULL DEFAULT ''");
